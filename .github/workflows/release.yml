@@ -120,5 +120,40 @@ jobs:
           name: windows
           path: |
             release/build/*.exe
-            release/build/*.zip
           retention-days: 5
+
+  # Create GitHub Release
+  create-release:
+    needs: [build-mac, build-linux, build-win]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-files
+
+      - name: List release files
+        run: find release-files -type f | sort
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: PatentHub v${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            release-files/**/*.exe
+            release-files/**/*.dmg
+            release-files/**/*.AppImage
+            release-files/**/*.deb
