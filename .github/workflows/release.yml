@@ -57,21 +57,6 @@ jobs:
 
   # Linux build
   build-linux:
-    strategy:
-      matrix:
-        include:
-          - target: AppImage
-            arch: x64
-            artifact_name: linux-AppImage-x64
-          - target: AppImage
-            arch: arm64
-            artifact_name: linux-AppImage-arm64
-          - target: deb
-            arch: x64
-            artifact_name: linux-deb-x64
-          - target: deb
-            arch: arm64
-            artifact_name: linux-deb-arm64
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -93,14 +78,15 @@ jobs:
         run: pnpm run build
 
       - name: Build and Package Linux
-        run: pnpm exec electron-builder build --publish never --linux --${{ matrix.target }} --${{ matrix.arch }}
+        run: pnpm exec electron-builder build --publish never --linux
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
+          name: linux
           path: |
-            release/build/*.${{ matrix.target == 'AppImage' && 'AppImage' || 'deb' }}
+            release/build/*.AppImage
+            release/build/*.deb
           retention-days: 5
 
   # Windows build
