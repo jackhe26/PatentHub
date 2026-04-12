@@ -40,6 +40,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build application
+        run: pnpm run build
+
       - name: Build and Package macOS
         run: pnpm exec electron-builder build --publish never --mac --${{ matrix.arch }}
 
@@ -86,6 +89,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build application
+        run: pnpm run build
+
       - name: Build and Package Linux
         run: pnpm exec electron-builder build --publish never --linux --${{ matrix.target }} --${{ matrix.arch }}
 
@@ -115,6 +121,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Build application
+        run: pnpm run build
 
       - name: Build and Package Windows
         run: pnpm exec electron-builder build --publish never --win
