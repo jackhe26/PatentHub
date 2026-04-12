@@ -45,4 +45,5 @@ venv/
 winCodeSign-*.7z
 
 # Release folder
-release/app/
+release/app/dist/
+release/app/node_modules/

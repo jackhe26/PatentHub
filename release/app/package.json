@@ -1,0 +1,24 @@
+{
+  "name": "patent-hub",
+  "productName": "PatentHub",
+  "version": "1.0.1",
+  "description": "基于AI的专利审查助手",
+  "main": "dist/main/main.js",
+  "author": {
+    "name": "专利审查四川中心",
+    "email": "jackhe@patent.hub"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.15.6",
+    "ai": "^4.3.19",
+    "pdf-parse": "^2.4.5",
+    "officeparser": "5.0.0",
+    "electron-debug": "^3.2.0",
+    "electron-log": "^5.3.4",
+    "electron-store": "^8.1.0",
+    "electron-updater": "^6.3.9",
+    "electron-devtools-installer": "^3.2.0",
+    "auto-launch": "^5.0.6",
+    "zod": "^4.3.6"
+  }
+}
