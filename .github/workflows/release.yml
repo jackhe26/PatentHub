@@ -40,10 +40,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build
-        run: pnpm run build
-
-      - name: Build macOS
+      - name: Build and Package macOS
         run: pnpm exec electron-builder build --publish never --mac --${{ matrix.arch }}
 
       - name: Upload artifact
@@ -89,10 +86,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build
-        run: pnpm run build
-
-      - name: Build Linux
+      - name: Build and Package Linux
         run: pnpm exec electron-builder build --publish never --linux --${{ matrix.target }} --${{ matrix.arch }}
 
       - name: Upload artifact
@@ -122,10 +116,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build
-        run: pnpm run build
-
-      - name: Build Windows
+      - name: Build and Package Windows
         run: pnpm exec electron-builder build --publish never --win
 
       - name: Upload artifact
