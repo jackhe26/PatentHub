@@ -1,0 +1,10 @@
+[babeldoc]
+openai = true
+openai-base-url = "https://api.minimaxi.com/v1"
+openai-api-key = "sk-cp-CewFZxBOvDM9ljuNsFEJhZrhpxCQmISGqO4Yd1IKMQE0Zon6VoO_6HoeVSndv01dT0plmQTHX7XAfF1UnrPb7-ugbJzLprsQbCyO7H43Mfd9pF-R1ij3u5g"
+openai-model = "MiniMax-M2.7"
+lang-in = "en"
+lang-out = "zh"
+qps = 10
+watermark-output-mode = "no_watermark"
+auto-enable-ocr-workaround = true

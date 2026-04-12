@@ -1,0 +1,144 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+jobs:
+  # macOS build
+  build-mac:
+    strategy:
+      matrix:
+        include:
+          - arch: x64
+            artifact_name: mac-x64
+          - arch: arm64
+            artifact_name: mac-arm64
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Build macOS
+        run: pnpm exec electron-builder build --publish never --mac --${{ matrix.arch }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            release/build/*.dmg
+            release/build/*.zip
+          retention-days: 5
+
+  # Linux build
+  build-linux:
+    strategy:
+      matrix:
+        include:
+          - target: AppImage
+            arch: x64
+            artifact_name: linux-AppImage-x64
+          - target: AppImage
+            arch: arm64
+            artifact_name: linux-AppImage-arm64
+          - target: deb
+            arch: x64
+            artifact_name: linux-deb-x64
+          - target: deb
+            arch: arm64
+            artifact_name: linux-deb-arm64
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Build Linux
+        run: pnpm exec electron-builder build --publish never --linux --${{ matrix.target }} --${{ matrix.arch }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            release/build/*.${{ matrix.target == 'AppImage' && 'AppImage' || 'deb' }}
+          retention-days: 5
+
+  # Windows build
+  build-win:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Build Windows
+        run: pnpm exec electron-builder build --publish never --win
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            release/build/*.exe
+            release/build/*.zip
+          retention-days: 5

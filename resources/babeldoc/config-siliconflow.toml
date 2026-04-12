@@ -1,0 +1,10 @@
+[babeldoc]
+openai = true
+openai-base-url = "https://api.siliconflow.cn/v1"
+openai-api-key = "sk-qdodyzrhxluuoenyaxsxoajvfmmekwnxtxenldftzvjnluvz"
+openai-model = "deepseek-ai/DeepSeek-V3.2"
+lang-in = "en"
+lang-out = "zh"
+qps = 50
+watermark-output-mode = "no_watermark"
+auto-enable-ocr-workaround = true
