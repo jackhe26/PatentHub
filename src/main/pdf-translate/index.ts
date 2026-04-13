@@ -26,6 +26,101 @@ type ProgressCallback = (progress: {
 // Active translation processes
 const activeProcesses: Map<string, { process: ChildProcess; abortController: AbortController }> = new Map()
 
+// 环境检测结果类型
+interface EnvCheckResult {
+  ok: boolean
+  pythonFound: boolean
+  pythonVersion: string
+  pythonCmd: string
+  babeldocInstalled: boolean
+  issues: string[]
+  pythonDownloadWin: string
+  pythonDownloadMac: string
+  pipInstallCommands: { name: string; cmd: string }[]
+}
+
+// 缓存检测结果
+let envCheckCache: EnvCheckResult | null = null
+
+/**
+ * 检测 Python 环境和 babeldoc 依赖
+ */
+async function checkEnvironment(): Promise<EnvCheckResult> {
+  if (envCheckCache && envCheckCache.ok) {
+    return envCheckCache
+  }
+
+  const result: EnvCheckResult = {
+    ok: false,
+    pythonFound: false,
+    pythonVersion: '',
+    pythonCmd: '',
+    babeldocInstalled: false,
+    issues: [],
+    pythonDownloadWin: 'https://mirrors.huaweicloud.com/python/3.11.9/python-3.11.9-amd64.exe',
+    pythonDownloadMac: 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-macos11.pkg',
+    pipInstallCommands: [
+      { name: '清华镜像（推荐）', cmd: 'pip install babeldoc -i https://pypi.tuna.tsinghua.edu.cn/simple' },
+      { name: '阿里镜像', cmd: 'pip install babeldoc -i https://mirrors.aliyun.com/pypi/simple' },
+      { name: '华为镜像', cmd: 'pip install babeldoc -i https://mirrors.huaweicloud.com/repository/pypi/simple' },
+    ]
+  }
+
+  const pythonCommands = process.platform === 'win32'
+    ? ['python', 'py', 'python3', 'python3.11', 'python3.10']
+    : ['python3', 'python3.11', 'python3.10', 'python']
+
+  for (const cmd of pythonCommands) {
+    try {
+      const version = await new Promise<string>((resolve, reject) => {
+        const proc = spawn(cmd, ['--version'], { stdio: 'pipe' })
+        let output = ''
+        proc.stdout?.on('data', (d: Buffer) => { output += d.toString() })
+        proc.stderr?.on('data', (d: Buffer) => { output += d.toString() })
+        proc.on('close', (code) => { if (code === 0) resolve(output.trim()); else reject(new Error(`exit ${code}`)) })
+        proc.on('error', reject)
+      })
+      const versionMatch = version.match(/Python (\d+)\.(\d+)/)
+      if (versionMatch) {
+        const major = parseInt(versionMatch[1])
+        const minor = parseInt(versionMatch[2])
+        if (major === 3 && minor >= 10) {
+          result.pythonFound = true
+          result.pythonVersion = version
+          result.pythonCmd = cmd
+          log.info(`[EnvCheck] Found Python: ${cmd} -> ${version}`)
+          break
+        } else {
+          result.issues.push(`找到 Python ${major}.${minor}，版本过低，需要 3.10+`)
+        }
+      }
+    } catch { /* 继续尝试 */ }
+  }
+
+  if (!result.pythonFound) {
+    result.issues.push('未找到 Python 3.10+，请先安装 Python')
+    envCheckCache = result
+    return result
+  }
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const proc = spawn(result.pythonCmd, ['-c', 'import babeldoc'], { stdio: 'pipe' })
+      proc.on('close', (code) => { if (code === 0) resolve(); else reject() })
+      proc.on('error', reject)
+    })
+    result.babeldocInstalled = true
+    log.info('[EnvCheck] babeldoc is installed')
+  } catch {
+    result.issues.push('未安装 babeldoc，请运行 pip install babeldoc')
+    log.warn('[EnvCheck] babeldoc not installed')
+  }
+
+  result.ok = result.pythonFound && result.babeldocInstalled
+  if (result.ok) envCheckCache = result
+  return result
+}
+
 /**
  * Get BabelDOC path
  */
@@ -553,7 +648,8 @@ async function translatePDF(
       // 3. {'type': 'stage_summary', 'stages': [...]}
       const parseBabelDocTextProgress = (text: string): boolean => {
         // 清理文本 - 移除乱码字符
-        const cleanText = text.replace(/[\r\u0000]/g, '').trim()
+        // eslint-disable-next-line no-control-regex
+        const cleanText = text.replace(/[\r\x00]/g, '').trim()
         
         if (!cleanText || cleanText.length < 5) return false
         
@@ -1063,6 +1159,33 @@ export function registerIPCHandlers(): void {
   ipcMain.handle('pdf:cleanup', async (_, sessionId: string) => {
     await cleanupTempFiles(sessionId)
     return { success: true }
+  })
+
+  // 环境检测 IPC handler - 前端调用此接口检测 Python 和 babeldoc 是否安装
+  ipcMain.handle('pdf:checkEnv', async () => {
+    try {
+      envCheckCache = null
+      const result = await checkEnvironment()
+      log.info('[pdf:checkEnv] result:', result)
+      return result
+    } catch (error) {
+      log.error('pdf:checkEnv error:', error)
+      return {
+        ok: false,
+        pythonFound: false,
+        pythonVersion: '',
+        pythonCmd: '',
+        babeldocInstalled: false,
+        issues: ['检测失败: ' + (error instanceof Error ? error.message : String(error))],
+        pythonDownloadWin: 'https://mirrors.huaweicloud.com/python/3.11.9/python-3.11.9-amd64.exe',
+        pythonDownloadMac: 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-macos11.pkg',
+        pipInstallCommands: [
+          { name: '清华镜像（推荐）', cmd: 'pip install babeldoc -i https://pypi.tuna.tsinghua.edu.cn/simple' },
+          { name: '阿里镜像', cmd: 'pip install babeldoc -i https://mirrors.aliyun.com/pypi/simple' },
+          { name: '华为镜像', cmd: 'pip install babeldoc -i https://mirrors.huaweicloud.com/repository/pypi/simple' },
+        ]
+      }
+    }
   })
 
   log.info('BabelDOC PDF translation IPC handlers registered')
