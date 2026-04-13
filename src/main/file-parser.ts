@@ -38,6 +38,7 @@ function getUnpackedModulePath(moduleName: string): string {
 
 /**
  * 安全加载 unpacked 模块
+ * 方式2 直接解析 package.json 的 CJS 入口，兼容 Portable 版（临时目录路径）
  */
 function requireUnpackedModule(moduleName: string): any {
   const errors: string[] = []
@@ -52,11 +53,25 @@ function requireUnpackedModule(moduleName: string): any {
     log.error(`[ModuleLoader] ❌ 方式1失败 for ${moduleName}: ${err}`)
   }
 
-  // 方式2: 使用 unpacked 路径
+  // 方式2: 使用 unpacked 路径，直接加载 CJS 文件（绕过 exports 字段解析，兼容 Portable 版）
   try {
-    const unpkgPath = getUnpackedModulePath(moduleName)
-    log.error(`[ModuleLoader] 方式2: require("${unpkgPath}")`)
-    return require(unpkgPath)
+    const moduleDir = getUnpackedModulePath(moduleName)
+    log.error(`[ModuleLoader] 方式2: 尝试直接加载 CJS 文件 from ${moduleDir}`)
+    const pkgJsonPath = path.join(moduleDir, 'package.json')
+    if (fs.existsSync(pkgJsonPath)) {
+      const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'))
+      const cjsRelPath = pkg?.exports?.['.']?.require?.default || pkg.main
+      if (cjsRelPath) {
+        const cjsPath = path.join(moduleDir, cjsRelPath)
+        log.error(`[ModuleLoader] 方式2: require("${cjsPath}")`)
+        if (fs.existsSync(cjsPath)) {
+          return require(cjsPath)
+        }
+      }
+    }
+    // 回退：直接加载目录
+    log.error(`[ModuleLoader] 方式2 fallback: require("${moduleDir}")`)
+    return require(moduleDir)
   } catch (e) {
     const err = e instanceof Error ? e.message : String(e)
     errors.push(`unpacked路径失败: ${err}`)
