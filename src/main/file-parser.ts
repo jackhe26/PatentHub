@@ -126,7 +126,16 @@ async function parsePdfWithPdfParse2(filePath: string): Promise<string> {
 
   let PDFParse: any
   try {
-    const pdfParseModule = requireUnpackedModule('pdf-parse')
+    // 优先使用 pdf-parse/node 子路径，专为 Node.js 设计，不需要 web worker
+    // 避免打包后 asar 内找不到 pdf.worker.mjs 的问题
+    let pdfParseModule: any
+    try {
+      pdfParseModule = require('pdf-parse/node')
+      log.info('[pdf-parse] Loaded via pdf-parse/node subpath')
+    } catch {
+      pdfParseModule = requireUnpackedModule('pdf-parse')
+      log.info('[pdf-parse] Loaded via requireUnpackedModule fallback')
+    }
     // pdf-parse 2.x exports { PDFParse: class, ... }
     PDFParse = pdfParseModule.PDFParse || pdfParseModule.default?.PDFParse
   } catch (loadError) {
