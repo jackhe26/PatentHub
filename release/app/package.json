@@ -1,7 +1,7 @@
 {
   "name": "patent-hub",
   "productName": "PatentHub",
-  "version": "1.0.1",
+  "version": "1.0.5",
   "description": "基于AI的专利审查助手",
   "main": "dist/main/main.js",
   "author": {

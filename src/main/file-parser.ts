@@ -140,28 +140,94 @@ async function parsePdfWithPdfParse2(filePath: string): Promise<string> {
   ensureDOMMatrix()
 
   let PDFParse: any
-  try {
-    // 优先使用 pdf-parse/node 子路径，专为 Node.js 设计，不需要 web worker
-    // 避免打包后 asar 内找不到 pdf.worker.mjs 的问题
-    let pdfParseModule: any
+  const attempts: { strategy: string; result: string }[] = []
+
+  // 策略1: 从 app.asar.unpacked 真实路径加载（__filename 是真实路径，动态 import 能正确解析 pdf.worker.mjs）
+  if (!PDFParse) {
     try {
-      pdfParseModule = require('pdf-parse/node')
-      log.info('[pdf-parse] Loaded via pdf-parse/node subpath')
-    } catch {
-      pdfParseModule = requireUnpackedModule('pdf-parse')
-      log.info('[pdf-parse] Loaded via requireUnpackedModule fallback')
+      const moduleDir = getUnpackedModulePath('pdf-parse')
+      const pkgJsonPath = path.join(moduleDir, 'package.json')
+      if (fs.existsSync(pkgJsonPath)) {
+        const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'))
+        const cjsRelPath = pkg?.exports?.['.']?.require?.default || pkg.main
+        if (cjsRelPath) {
+          const cjsPath = path.join(moduleDir, cjsRelPath)
+          if (fs.existsSync(cjsPath)) {
+            const m = require(cjsPath)
+            PDFParse = m?.PDFParse || m?.default?.PDFParse
+            if (PDFParse) {
+              attempts.push({ strategy: `app.asar.unpacked 真实路径 ${cjsPath}`, result: '✅ 成功找到 PDFParse' })
+              log.info(`[pdf-parse] Strategy 1 success (unpacked real path): ${cjsPath}`)
+            } else {
+              attempts.push({ strategy: `app.asar.unpacked 真实路径 ${cjsPath}`, result: `❌ 加载成功但未找到 PDFParse，导出: ${Object.keys(m || {}).join(', ')}` })
+            }
+          } else {
+            attempts.push({ strategy: `app.asar.unpacked 真实路径`, result: `❌ CJS 文件不存在: ${cjsPath}` })
+          }
+        } else {
+          attempts.push({ strategy: 'app.asar.unpacked 真实路径', result: '❌ package.json 中未找到 CJS 入口' })
+        }
+      } else {
+        attempts.push({ strategy: 'app.asar.unpacked 真实路径', result: `❌ package.json 不存在: ${pkgJsonPath}` })
+        log.warn(`[pdf-parse] Strategy 1: package.json not found at ${pkgJsonPath}`)
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      attempts.push({ strategy: 'app.asar.unpacked 真实路径', result: `❌ 加载失败: ${msg}` })
+      log.warn('[pdf-parse] Strategy 1 failed:', msg)
     }
-    // pdf-parse 2.x exports { PDFParse: class, ... }
-    PDFParse = pdfParseModule.PDFParse || pdfParseModule.default?.PDFParse
-  } catch (loadError) {
-    log.error('[pdf-parse] Failed to load pdf-parse module:', loadError)
-    throw new Error(`Failed to load pdf-parse: ${loadError}`)
+  }
+
+  // 策略2: require('pdf-parse') 主入口（开发模式 / 备用）
+  if (!PDFParse) {
+    try {
+      const m = require('pdf-parse')
+      PDFParse = m?.PDFParse || m?.default?.PDFParse
+      if (PDFParse) {
+        attempts.push({ strategy: 'require(pdf-parse)', result: '✅ 成功找到 PDFParse' })
+        log.info('[pdf-parse] Strategy 2 success: require(pdf-parse)')
+      } else {
+        attempts.push({ strategy: 'require(pdf-parse)', result: `❌ 模块加载成功但未找到 PDFParse，导出内容: ${Object.keys(m || {}).join(', ')}` })
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      attempts.push({ strategy: 'require(pdf-parse)', result: `❌ 加载失败: ${msg}` })
+      log.warn('[pdf-parse] Strategy 2 failed:', msg)
+    }
+  }
+
+  // 策略3: 直接拼接已知 CJS 路径（终极兜底）
+  if (!PDFParse) {
+    try {
+      const moduleDir = getUnpackedModulePath('pdf-parse')
+      const cjsPath = path.join(moduleDir, 'dist', 'pdf-parse', 'cjs', 'index.cjs')
+      if (fs.existsSync(cjsPath)) {
+        const m = require(cjsPath)
+        PDFParse = m?.PDFParse || m?.default?.PDFParse
+        if (PDFParse) {
+          attempts.push({ strategy: `直接加载 ${cjsPath}`, result: '✅ 成功找到 PDFParse' })
+          log.info(`[pdf-parse] Strategy 3 success: ${cjsPath}`)
+        } else {
+          attempts.push({ strategy: `直接加载 ${cjsPath}`, result: `❌ 文件加载成功但未找到 PDFParse，导出内容: ${Object.keys(m || {}).join(', ')}` })
+        }
+      } else {
+        attempts.push({ strategy: `直接加载 ${cjsPath}`, result: '❌ 文件不存在' })
+        log.warn(`[pdf-parse] Strategy 3: CJS file not found at ${cjsPath}`)
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      attempts.push({ strategy: '直接加载 CJS 文件', result: `❌ 加载失败: ${msg}` })
+      log.warn('[pdf-parse] Strategy 3 failed:', msg)
+    }
   }
 
   if (!PDFParse) {
-    throw new Error('pdf-parse module loaded but PDFParse class not found')
+    const detail = attempts.map(a => `  [${a.strategy}] ${a.result}`).join('\n')
+    log.error('[pdf-parse] All strategies failed:\n' + detail)
+    throw new Error(`无法加载 pdf-parse 解析器，已尝试以下方式：\n${detail}`)
   }
 
+  log.info(`[pdf-parse] PDFParse loaded, parsing: ${filePath}`)
   try {
     const dataBuffer = fs.readFileSync(filePath)
     const uint8Array = new Uint8Array(dataBuffer)
@@ -170,8 +236,9 @@ async function parsePdfWithPdfParse2(filePath: string): Promise<string> {
     await parser.destroy()
     return result.text as string
   } catch (parseError) {
-    log.error('[pdf-parse] Failed to parse PDF:', parseError)
-    throw parseError
+    const msg = parseError instanceof Error ? parseError.message : String(parseError)
+    log.error('[pdf-parse] PDF parsing failed:', msg)
+    throw new Error(`PDF 解析失败: ${msg}`)
   }
 }
 
@@ -231,6 +298,8 @@ async function concurrentMap<T, R>(
 }
 
 export async function parseFile(filePath: string) {
+  log.info(`[parseFile] Start parsing: ${filePath}`)
+
   if (isOfficeFilePath(filePath)) {
     const isPdfFile = filePath.toLowerCase().endsWith('.pdf')
 
@@ -239,10 +308,11 @@ export async function parseFile(filePath: string) {
       const officeParser = requireUnpackedModule('officeparser')
       const parser = officeParser.default || officeParser
       const data = await parser.parseOfficeAsync(filePath)
+      log.info(`[officeparser] ✅ Success: ${filePath}, extracted ${String(data).length} chars`)
       return data
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
-      log.warn('[officeparser] Failed to parse file:', errorMsg)
+      log.warn(`[officeparser] ❌ Failed: ${errorMsg}`)
 
       // PDF 解析失败时，回退到 pdf-parse 2.x
       if (isPdfFile) {
