@@ -36,7 +36,7 @@ PatentHub 是一款基于 AI 大语言模型的桌面应用程序，专门为专
 
 | Windows (安装版) | Windows (便携版) | macOS (Intel) | macOS (Apple Silicon) |
 |---------|---------------|---------------|---------------------|
-| [下载 .exe](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.0.1-Setup.exe) | [下载 Portable.exe](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.0.1-Portable.exe) | [下载 .dmg](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.0.1.dmg) | [下载 .dmg](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.0.1-arm64.dmg) |
+| [下载 .exe](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.0.5-Setup.exe) | [下载 Portable.exe](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.0.5-Portable.exe) | [下载 .dmg](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.0.5.dmg) | [下载 .dmg](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.0.5-arm64.dmg) |
 
 ## 技术栈
 
