@@ -76,10 +76,10 @@ interface GeneratedImageGalleryItemProps {
 
 // Calculate display dimensions based on image aspect ratio
 // Fixed height for standard ratios, adjusted for extreme ratios
-const MAX_HEIGHT = 600
-const MAX_WIDTH = 840
-const MIN_WIDTH = 320
-const MOBILE_SIZE = 320 // Fixed 1:1 size for mobile
+const MAX_HEIGHT = 800
+const MAX_WIDTH = 1200
+const MIN_WIDTH = 400
+const MOBILE_SIZE = 400 // Fixed 1:1 size for mobile
 
 function calculateDisplaySize(width: number, height: number): { displayWidth: number; displayHeight: number } {
   const aspectRatio = width / height

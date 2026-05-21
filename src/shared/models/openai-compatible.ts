@@ -80,6 +80,144 @@ export default abstract class OpenAICompatible extends AbstractAISDKModel implem
       return []
     })
   }
+
+  /**
+   * 重写 paint 方法，直接调用 API 绕过 AI SDK
+   * 这样可以正确处理返回 URL 的模型（如 nano-banana）
+   */
+  public async paint(
+    params: {
+      prompt: string
+      images?: { imageUrl: string }[]
+      num: number
+      aspectRatio?: string
+    },
+    signal?: AbortSignal,
+    callback?: (picBase64: string) => void
+  ): Promise<string[]> {
+    const modelId = this.options.model.modelId
+
+    // 构建请求体
+    const requestBody: Record<string, unknown> = {
+      model: modelId,
+      prompt: params.prompt,
+      n: params.num,
+    }
+
+    // 添加图片比例支持
+    if (params.aspectRatio) {
+      // 将 aspectRatio 转换为 size 格式，如 "1:1" -> "1024x1024"
+      const [width, height] = params.aspectRatio.split(':').map(Number)
+      if (width && height) {
+        // 计算标准尺寸，保持宽高比
+        const baseSize = 1024
+        if (width === height) {
+          requestBody.size = '1024x1024'
+        } else if (width > height) {
+          requestBody.size = `${baseSize}x${Math.round(baseSize * (height / width))}`
+        } else {
+          requestBody.size = `${Math.round(baseSize * (width / height))}x${baseSize}`
+        }
+      }
+    }
+
+    // 直接用 fetch 调用图片生成 API
+    const fetchFn = createFetchWithProxy(this.options.useProxy, this.dependencies)
+    const url = `${this.options.apiHost}/v1/images/generations`
+
+    const response = await fetchFn(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.options.apiKey}`,
+      },
+      body: JSON.stringify(requestBody),
+      signal,
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new ApiError(`Image generation failed: ${response.status} ${response.statusText} - ${errorText}`)
+    }
+
+    const result = await response.json() as {
+      data: Array<{
+        b64_json?: string
+        url?: string
+        revised_prompt?: string
+      }>
+    }
+
+    if (!result.data || result.data.length === 0) {
+      throw new ApiError('No images generated')
+    }
+
+    // 处理每张图片
+    const dataUrls: string[] = []
+    for (const image of result.data) {
+      let dataUrl: string
+
+      if (image.b64_json) {
+        // 直接返回 base64
+        dataUrl = `data:image/png;base64,${image.b64_json}`
+      } else if (image.url) {
+        // 下载 URL 并转换为 base64
+        try {
+          const imageResponse = await fetch(image.url)
+          if (!imageResponse.ok) {
+            throw new Error(`Failed to download image: ${imageResponse.status}`)
+          }
+          const blob = await imageResponse.blob()
+          const arrayBuffer = await blob.arrayBuffer()
+          const base64 = btoa(
+            new Uint8Array(arrayBuffer).reduce((str, byte) => str + String.fromCharCode(byte), '')
+          )
+          dataUrl = `data:${blob.type || 'image/png'};base64,${base64}`
+        } catch (error) {
+          console.error('Failed to download image from URL:', image.url, error)
+          throw new ApiError(`Failed to download image from URL: ${image.url}`)
+        }
+      } else {
+        throw new ApiError('No image data (b64_json or url) in response')
+      }
+
+      dataUrls.push(dataUrl)
+      callback?.(dataUrl)
+    }
+
+    return dataUrls
+  }
+}
+
+// Keywords for detecting image generation capability
+const IMAGE_GENERATION_KEYWORDS = [
+  'image',
+  'banana',
+  'flux',
+  'seedream',
+  'dalle',
+  'sd-',
+  'sdxl',
+  'wan',
+  'imagen',
+  'ideogram',
+  'recraft',
+  'kolors',
+  'hidream',
+  'grok-imagine',
+  'midjourney',
+  'lucid',
+  'phoenix',
+  'luma',
+  'vidu',
+]
+
+/**
+ * Check if a model can generate images based on its ID
+ */
+function canGenerateImage(modelId: string): boolean {
+  const lowerModelId = modelId.toLowerCase()
+  return IMAGE_GENERATION_KEYWORDS.some(keyword => lowerModelId.includes(keyword))
 }
 
 interface ListModelsResponse {
@@ -151,9 +289,19 @@ export async function fetchRemoteModels(
     if (item.architecture) {
       const capabilities: ProviderModelInfo['capabilities'] = []
 
-      // Check for vision capability
+      // Check for vision capability (input - can receive images)
       if (item.architecture.input_modalities?.includes('image')) {
         capabilities.push('vision')
+      }
+
+      // Check for image generation capability (output)
+      // Priority 1: Check API response
+      if (item.architecture.output_modalities?.includes('image')) {
+        capabilities.push('image')
+      }
+      // Priority 2: Fallback to model ID keyword detection
+      else if (canGenerateImage(item.id)) {
+        capabilities.push('image')
       }
 
       // Check for web search capability (OpenRouter specific)
@@ -171,6 +319,11 @@ export async function fetchRemoteModels(
 
       if (capabilities.length > 0) {
         modelInfo.capabilities = capabilities
+      }
+    } else {
+      // If no architecture info, still try to detect by model ID
+      if (canGenerateImage(item.id)) {
+        modelInfo.capabilities = ['image']
       }
     }
 

@@ -37,7 +37,7 @@ export const ProviderModelInfoSchema = z.object({
   nickname: z.string().optional().catch(undefined),
   labels: z.array(z.string()).optional().catch([]),
   capabilities: z
-    .array(z.enum(['vision', 'reasoning', 'tool_use', 'web_search']))
+    .array(z.enum(['vision', 'reasoning', 'tool_use', 'web_search', 'image']))
     .optional()
     .catch([]),
   contextWindow: z.number().optional().catch(undefined),

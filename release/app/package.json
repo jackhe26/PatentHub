@@ -1,12 +1,12 @@
 {
   "name": "patent-hub",
   "productName": "PatentHub",
-  "version": "1.0.5",
+  "version": "1.1.0",
   "description": "基于AI的专利审查助手",
   "main": "dist/main/main.js",
   "author": {
-    "name": "专利审查四川中心",
-    "email": "jackhe@patent.hub"
+    "name": "jackhe",
+    "email": ""
   },
   "dependencies": {
     "@libsql/client": "^0.15.6",

@@ -75,6 +75,39 @@ export const ImageModelSelect = forwardRef<HTMLButtonElement, ImageModelSelectPr
         .filter((item) => item.imageModels.length > 0)
     }, [providers])
 
+    // Custom OpenAI-compatible providers (third-party platforms like SiliconFlow, OpenRouter, etc.)
+    // Only show models with 'image' capability
+    const customOpenAIProviders = useMemo(() => {
+      return providers
+        .filter((p) => {
+          // Custom providers with OpenAI type
+          if (!p.isCustom) return false
+          // Check if it's OpenAI-compatible type
+          const providerType = (p as any).type
+          return providerType === ModelProviderType.OpenAI || providerType === 'openai'
+        })
+        .map((provider) => {
+          // Only get models that have 'image' capability
+          const allModels = provider.models || provider.defaultSettings?.models || []
+          const imageModels = allModels
+            .filter((m) => {
+              // Primary check: explicit 'image' capability tag
+              if (m.capabilities?.includes('image')) return true
+              // Fallback: match by model name keywords (handles cached data where capabilities may be lost)
+              const name = (m.nickname || m.modelId || '').toLowerCase()
+              return ['image', 'sd', 'flux', 'banana', 'dall-e', 'gpt-image', 'paint', 'draw'].some(
+                (keyword) => name.includes(keyword)
+              )
+            })
+            .map((m) => ({
+              modelId: m.modelId,
+              displayName: m.nickname || m.modelId,
+            }))
+          return { provider, imageModels }
+        })
+        .filter((item) => item.imageModels.length > 0)
+    }, [providers])
+
     const customGeminiProviders = useMemo(() => {
       return providers
         .filter((p) => p.isCustom && p.type === ModelProviderType.Gemini)
@@ -115,27 +148,7 @@ export const ImageModelSelect = forwardRef<HTMLButtonElement, ImageModelSelectPr
 
         <Combobox.Dropdown className="!rounded-2xl !border-[var(--chatbox-border-primary)] !shadow-lg overflow-hidden">
           <Combobox.Options mah={400} style={{ overflowY: 'auto' }} className="p-1">
-            <Combobox.Group
-              label="Chatbox AI"
-              classNames={{ groupLabel: '!text-xs !font-semibold !uppercase tracking-wide' }}
-            >
-              <Combobox.Option
-                key={`${ModelProviderEnum.ChatboxAI}:${CHATBOXAI_DEFAULT_IMAGE_MODEL.modelId}`}
-                value={`${ModelProviderEnum.ChatboxAI}:${CHATBOXAI_DEFAULT_IMAGE_MODEL.modelId}`}
-                className="!rounded-lg"
-              >
-                <Text size="sm">{CHATBOXAI_DEFAULT_IMAGE_MODEL.displayName}</Text>
-              </Combobox.Option>
-              {chatboxAIImageModels.map((model) => (
-                <Combobox.Option
-                  key={`${ModelProviderEnum.ChatboxAI}:${model.modelId}`}
-                  value={`${ModelProviderEnum.ChatboxAI}:${model.modelId}`}
-                  className="!rounded-lg"
-                >
-                  <Text size="sm">{model.displayName}</Text>
-                </Combobox.Option>
-              ))}
-            </Combobox.Group>
+            {/* Chatbox AI 内置模型已移除，仅保留第三方平台 */}
 
             {geminiProvider && (
               <>
@@ -158,6 +171,26 @@ export const ImageModelSelect = forwardRef<HTMLButtonElement, ImageModelSelectPr
             )}
 
             {customGeminiProviders.map(({ provider, imageModels }) => (
+              <div key={provider.id}>
+                <Divider my="xs" />
+                <Combobox.Group
+                  label={provider.name}
+                  classNames={{ groupLabel: '!text-xs !font-semibold !uppercase tracking-wide' }}
+                >
+                  {imageModels.map((model) => (
+                    <Combobox.Option
+                      key={`${provider.id}:${model.modelId}`}
+                      value={`${provider.id}:${model.modelId}`}
+                      className="!rounded-lg"
+                    >
+                      <Text size="sm">{model.displayName}</Text>
+                    </Combobox.Option>
+                  ))}
+                </Combobox.Group>
+              </div>
+            ))}
+
+            {customOpenAIProviders.map(({ provider, imageModels }) => (
               <div key={provider.id}>
                 <Divider my="xs" />
                 <Combobox.Group

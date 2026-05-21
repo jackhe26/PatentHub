@@ -1,7 +1,7 @@
 {
   "name": "patent-hub",
   "productName": "PatentHub",
-  "version": "1.0.5",
+  "version": "1.1.0",
   "engines": {
     "node": ">=20.0.0 <23.0.0",
     "pnpm": ">=10.0.0"
@@ -64,8 +64,8 @@
   },
   "keywords": [],
   "author": {
-    "name": "bennhuang",
-    "email": "tohuangbin@gmail.com"
+    "name": "jackhe",
+    "email": ""
   },
   "devDependencies": {
     "@ai-sdk/anthropic": "^3.0.6",

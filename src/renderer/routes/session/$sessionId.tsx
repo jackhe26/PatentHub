@@ -1,5 +1,6 @@
 import NiceModal from '@ebay/nice-modal-react'
 import { ActionIcon, Avatar, Box, Button, Card, Menu, Stack, Text, Group } from '@mantine/core'
+import { IconFileTypePdf, IconFileOff } from '@tabler/icons-react'
 import type { CopilotDetail, Message, ModelProvider, MessageFile } from '@shared/types'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { ForwardedRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -182,6 +183,9 @@ function RouteComponent() {
   const { session: currentSession, isFetching } = useSession(currentSessionId)
   const setLastUsedChatModel = useStore(lastUsedModelStore, (state) => state.setChatModel)
   const setLastUsedPictureModel = useStore(lastUsedModelStore, (state) => state.setPictureModel)
+
+  // PDF面板显示/隐藏状态
+  const [showPdfPanel, setShowPdfPanel] = useState(true)
 
   const currentMessageList = useMemo(() => (currentSession ? getAllMessageList(currentSession) : []), [currentSession])
   const lastGeneratingMessage = useMemo(
@@ -392,11 +396,25 @@ function RouteComponent() {
 
   // If there's exactly one PDF file, show dual-pane layout
   if (singlePdfFile && currentSession) {
+    // 计算宽度
+    const pdfWidth = showPdfPanel ? '45%' : '0%'
+    const chatWidth = showPdfPanel ? '55%' : '100%'
+    
     return (
       <div className="flex flex-col h-full">
-        {/* 搭档选择器 - 显示在Header下方 */}
-        <Box px="sm" py="xs" className="flex items-center gap-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-          <div style={{ marginLeft: '40%' }}>
+        {/* 搭档选择器 - 显示在Header下方，添加title-bar类支持窗口拖拽 */}
+        <Box px="sm" py="xs" className="title-bar flex items-center gap-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+          {/* PDF切换按钮 */}
+          <ActionIcon
+            variant="subtle"
+            color={showPdfPanel ? 'blue' : 'gray'}
+            onClick={() => setShowPdfPanel(!showPdfPanel)}
+            title={showPdfPanel ? '隐藏PDF预览' : '显示PDF预览'}
+            className="controls"
+          >
+            {showPdfPanel ? <IconFileTypePdf size={20} /> : <IconFileOff size={20} />}
+          </ActionIcon>
+          <div style={{ marginLeft: '35%' }}>
             <Menu shadow="lg" width={240} position="bottom-start">
               <Menu.Target>
                 <Button 
@@ -409,7 +427,7 @@ function RouteComponent() {
                   ) : (
                     <Avatar size={20} color="white">{(selectedCopilot?.name || '?').slice(0, 1)}</Avatar>
                   )}
-                  className="font-semibold"
+                  className="font-semibold controls"
                 >
                   我的审查搭档
                 </Button>
@@ -448,15 +466,15 @@ function RouteComponent() {
         </Box>
         <Header session={currentSession} />
         
-        {/* Left: PDF Preview, Right: Chat */}
+        {/* Left: PDF Preview, Right: Chat - 根据showPdfPanel动态调整宽度 */}
         <div className="flex flex-1 min-h-0" style={{ flex: 1 }}>
-          {/* Left: PDF Preview */}
-          <div style={{ width: '50%', padding: '0 8px' }}>
+          {/* Left: PDF Preview - 显示/隐藏 */}
+          <div style={{ width: pdfWidth, padding: '0 8px', display: showPdfPanel ? 'block' : 'none', transition: 'width 0.2s ease' }}>
             <PDFPreviewPanel pdfFile={singlePdfFile} />
           </div>
           
-          {/* Right: Chat area */}
-          <div style={{ width: '50%', padding: '0 8px', display: 'flex', flexDirection: 'column' }}>
+          {/* Right: Chat area - 根据showPdfPanel动态调整宽度 */}
+          <div style={{ width: chatWidth, padding: '0 8px', display: 'flex', flexDirection: 'column', transition: 'width 0.2s ease' }}>
             <MessageList ref={messageListRef} key={`message-list${currentSessionId}`} currentSession={currentSession} />
           </div>
         </div>
@@ -485,8 +503,8 @@ function RouteComponent() {
   // For regular chat sessions (0 or >=2 PDFs), use normal layout
   return currentSession ? (
     <div className="flex flex-col h-full">
-      {/* 搭档选择器 - 显示在Header下方 */}
-      <Box px="sm" py="xs" className="flex items-center gap-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+      {/* 搭档选择器 - 显示在Header下方，添加title-bar类支持窗口拖拽 */}
+      <Box px="sm" py="xs" className="title-bar flex items-center gap-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
         <Menu shadow="lg" width={240} position="bottom-start">
           <Menu.Target>
             <Button 
@@ -499,7 +517,7 @@ function RouteComponent() {
               ) : (
                 <Avatar size={20} color="white">{(selectedCopilot?.name || '?').slice(0, 1)}</Avatar>
               )}
-              className="font-semibold"
+              className="font-semibold controls"
             >
               {selectedCopilot ? selectedCopilot.name : t('选择搭档')}
             </Button>

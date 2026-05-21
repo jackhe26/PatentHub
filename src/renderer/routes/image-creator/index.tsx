@@ -22,6 +22,7 @@ import {
   IconArrowUp,
   IconPlus,
   IconSparkles,
+  IconDimensions,
 } from '@tabler/icons-react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -49,11 +50,14 @@ import {
   blobToDataUrl,
   CHATBOXAI_IMAGE_MODEL_IDS,
   GEMINI_IMAGE_MODEL_IDS,
+  getImageSize,
   getRatioOptionsForModel,
   HISTORY_PANEL_WIDTH,
   IMAGE_MODEL_FALLBACK_NAMES,
   MAX_REFERENCE_IMAGES,
   OPENAI_IMAGE_MODEL_IDS,
+  type ResolutionOption,
+  RESOLUTION_OPTIONS,
 } from './-components/constants'
 import { EmptyState } from './-components/EmptyState'
 import { GeneratedImagesGallery } from './-components/GeneratedImagesGallery'
@@ -79,9 +83,11 @@ interface InputToolbarProps {
   modelDisplayName: string
   selectedRatio: string
   ratioOptions: string[]
+  selectedResolution: ResolutionOption
   onModelDrawerOpen: () => void
   onRatioDrawerOpen: () => void
   onRatioSelect: (ratio: string) => void
+  onResolutionSelect: (resolution: ResolutionOption) => void
   onModelSelect: (provider: string, model: string) => void
   onAddReference: () => void
   onNewCreation: () => void
@@ -92,9 +98,11 @@ function InputToolbar({
   modelDisplayName,
   selectedRatio,
   ratioOptions,
+  selectedResolution,
   onModelDrawerOpen,
   onRatioDrawerOpen,
   onRatioSelect,
+  onResolutionSelect,
   onModelSelect,
   onAddReference,
   onNewCreation,
@@ -103,7 +111,7 @@ function InputToolbar({
 
   return (
     <Flex align="center" gap={0} className="shrink-0 w-full" justify="space-between">
-      {/* Left Group: Model, Ratio, Reference */}
+      {/* Left Group: Model, Ratio, Resolution, Reference */}
       <Flex align="center" gap={0}>
         {/* Model Select */}
         {isSmallScreen ? (
@@ -157,6 +165,37 @@ function InputToolbar({
                 <Menu.Item key={ratio} onClick={() => onRatioSelect(ratio)} className="!rounded-lg">
                   <Text size="sm" fw={500} ta="center">
                     {ratio}
+                  </Text>
+                </Menu.Item>
+              ))}
+            </Menu.Dropdown>
+          </Menu>
+        )}
+
+        {/* Resolution Select */}
+        {isSmallScreen ? (
+          <UnstyledButton className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-[var(--chatbox-background-tertiary)] transition-colors">
+            <IconDimensions size={16} className="text-[var(--chatbox-tint-secondary)]" />
+            <Text size="sm" className="text-[var(--chatbox-tint-secondary)]">
+              {selectedResolution}
+            </Text>
+          </UnstyledButton>
+        ) : (
+          <Menu position="top" withinPortal shadow="md" radius="lg">
+            <Menu.Target>
+              <UnstyledButton className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-[var(--chatbox-background-tertiary)] transition-colors">
+                <IconDimensions size={16} className="text-[var(--chatbox-tint-secondary)]" />
+                <Text size="sm" className="text-[var(--chatbox-tint-secondary)]">
+                  {selectedResolution}
+                </Text>
+                <IconChevronRight size={14} className="text-[var(--chatbox-tint-tertiary)] rotate-90" />
+              </UnstyledButton>
+            </Menu.Target>
+            <Menu.Dropdown className="!rounded-2xl" style={{ minWidth: 80 }}>
+              {RESOLUTION_OPTIONS.map((res) => (
+                <Menu.Item key={res} onClick={() => onResolutionSelect(res)} className="!rounded-lg">
+                  <Text size="sm" fw={500} ta="center">
+                    {res}
                   </Text>
                 </Menu.Item>
               ))}
@@ -218,6 +257,7 @@ function ImageCreatorPage() {
   const [selectedProvider, setSelectedProvider] = useState<string>(ModelProviderEnum.ChatboxAI)
   const [selectedModel, setSelectedModel] = useState<string>('')
   const [selectedRatio, setSelectedRatio] = useState<string>('auto')
+  const [selectedResolution, setSelectedResolution] = useState<ResolutionOption>('1k')
   const [showModelDrawer, setShowModelDrawer] = useState(false)
   const [showRatioDrawer, setShowRatioDrawer] = useState(false)
 
@@ -299,6 +339,9 @@ function ImageCreatorPage() {
         ...new Set(referenceImages.map((img) => img.sourceRecordId).filter((id): id is string => !!id)),
       ]
 
+      // 根据比例和分辨率计算实际像素尺寸
+      const size = getImageSize(selectedRatio, selectedResolution)
+
       await createAndGenerate({
         prompt: prompt.trim(),
         referenceImages: referenceImages.map((img) => img.storageKey),
@@ -308,6 +351,7 @@ function ImageCreatorPage() {
         },
         imageGenerateNum: 1,
         aspectRatio: selectedRatio,
+        size,
         parentIds: parentIds.length > 0 ? parentIds : undefined,
       })
 
@@ -316,7 +360,7 @@ function ImageCreatorPage() {
     } catch (error) {
       log.error('Failed to generate image:', error)
     }
-  }, [prompt, referenceImages, selectedProvider, selectedModel, selectedRatio, isCurrentlyGenerating])
+  }, [prompt, referenceImages, selectedProvider, selectedModel, selectedRatio, selectedResolution, isCurrentlyGenerating])
 
   const handleQuickPromptSubmit = useCallback(
     async (quickPrompt: string) => {
@@ -407,16 +451,7 @@ function ImageCreatorPage() {
   const imageModelGroups = useMemo(() => {
     const groups: { label: string; providerId: string; models: { modelId: string; displayName: string }[] }[] = []
 
-    const chatboxProvider = providers.find((p) => p.id === ModelProviderEnum.ChatboxAI)
-    if (chatboxProvider) {
-      const providerModels = chatboxProvider.models || chatboxProvider.defaultSettings?.models || []
-      const models = getAvailableImageModels(providerModels, CHATBOXAI_IMAGE_MODEL_IDS)
-      groups.push({
-        label: 'Chatbox AI',
-        providerId: ModelProviderEnum.ChatboxAI,
-        models: [CHATBOXAI_DEFAULT_IMAGE_MODEL, ...models],
-      })
-    }
+    // Chatbox AI 内置模型已移除，仅保留第三方平台
 
     const geminiProvider = providers.find((p) => p.id === ModelProviderEnum.Gemini)
     if (geminiProvider) {
@@ -442,6 +477,30 @@ function ImageCreatorPage() {
       .forEach((provider) => {
         const providerModels = provider.models || provider.defaultSettings?.models || []
         const models = getAvailableImageModels(providerModels, OPENAI_IMAGE_MODEL_IDS)
+        if (models.length > 0) {
+          groups.push({ label: provider.name, providerId: provider.id, models })
+        }
+      })
+
+    // Only show custom provider models with 'image' capability
+    providers
+      .filter((p) => p.isCustom)
+      .forEach((provider) => {
+        const providerModels = provider.models || provider.defaultSettings?.models || []
+        const models = providerModels
+          .filter((m) => {
+            // Primary check: explicit 'image' capability tag
+            if (m.capabilities?.includes('image')) return true
+            // Fallback: match by model name keywords (handles cached data where capabilities may be lost)
+            const name = (m.nickname || m.modelId || '').toLowerCase()
+            return ['image', 'sd', 'flux', 'banana', 'dall-e', 'gpt-image', 'paint', 'draw'].some(
+              (keyword) => name.includes(keyword)
+            )
+          })
+          .map((m) => ({
+            modelId: m.modelId,
+            displayName: m.nickname || m.modelId,
+          }))
         if (models.length > 0) {
           groups.push({ label: provider.name, providerId: provider.id, models })
         }
@@ -500,7 +559,7 @@ function ImageCreatorPage() {
         <Flex direction="column" flex={1} h="100%" className="overflow-hidden relative">
           {/* Results Area */}
           <ScrollArea flex={1} type="auto" offsetScrollbars={!isSmallScreen}>
-            <Box maw={900} mx="auto" py="xl" px="md" className="min-h-full">
+            <Box maw={1200} mx="auto" py="xl" px="md" className="min-h-full">
               {!currentRecord && <EmptyState onPromptSelect={handleQuickPromptSubmit} />}
 
               {currentRecord && (
@@ -538,7 +597,7 @@ function ImageCreatorPage() {
 
           {/* Input Area */}
           <Box py="md" px="sm">
-            <Stack gap="xs" maw={800} mx="auto">
+            <Stack gap="xs" maw={1000} mx="auto">
               <ReferenceImagesPreview
                 images={referenceImages}
                 onRemove={handleRemoveReferenceImage}
@@ -616,9 +675,11 @@ function ImageCreatorPage() {
                     modelDisplayName={modelDisplayName}
                     selectedRatio={selectedRatio}
                     ratioOptions={ratioOptions}
+                    selectedResolution={selectedResolution}
                     onModelDrawerOpen={() => setShowModelDrawer(true)}
                     onRatioDrawerOpen={() => setShowRatioDrawer(true)}
                     onRatioSelect={setSelectedRatio}
+                    onResolutionSelect={setSelectedResolution}
                     onModelSelect={handleModelSelect}
                     onAddReference={() => fileInputRef.current?.click()}
                     onNewCreation={handleNewCreation}

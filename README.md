@@ -13,6 +13,7 @@
   <a href="#"><img alt="Platform" src="https://img.shields.io/badge/Platform-Windows-blue?style=flat-square&logo=windows&logoColor=white" /></a>
   <a href="#"><img alt="Platform" src="https://img.shields.io/badge/Platform-macOS-black?style=flat-square&logo=apple&logoColor=white" /></a>
   <a href="#"><img alt="Platform" src="https://img.shields.io/badge/Platform-Linux-yellow?style=flat-square&logo=linux&logoColor=white" /></a>
+  <a href="#"><img alt="Platform" src="https://img.shields.io/badge/Platform-Android-green?style=flat-square&logo=android&logoColor=white" /></a>
   <a href="#"><img alt="License" src="https://img.shields.io/badge/License-GPLv3-green?style=flat-square" /></a>
 </p>
 
@@ -20,7 +21,7 @@
 
 ## 简介
 
-PatentHub 是一款基于 AI 大语言模型的桌面应用程序，专门为专利审查工作设计。它利用先进的 AI 技术辅助专利审查员和代理人进行专利检索、分析和审查工作。
+PatentHub 是一款基于 AI 大语言模型的桌面/移动应用程序，专门为专利审查工作设计。它利用先进的 AI 技术辅助专利审查员和代理人进行专利检索、分析和审查工作。
 
 ## 主要功能
 
@@ -28,7 +29,7 @@ PatentHub 是一款基于 AI 大语言模型的桌面应用程序，专门为专
 - **专利分析**：自动分析专利技术特征，生成技术要点摘要
 - **AI 对话助手**：内置专利领域专业 AI 助手，回答审查相关问题
 - **多模型支持**：支持 OpenAI、Claude、Gemini、Ollama 等多种 AI 模型
-- **跨平台**：支持 Windows、macOS、Linux 系统
+- **跨平台**：支持 Windows、macOS、Linux 及 Android 系统
 
 ## 下载
 
@@ -36,11 +37,19 @@ PatentHub 是一款基于 AI 大语言模型的桌面应用程序，专门为专
 
 | Windows (安装版) | Windows (便携版) | macOS (Intel) | macOS (Apple Silicon) |
 |---------|---------------|---------------|---------------------|
-| [下载 .exe](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.0.5-Setup.exe) | [下载 Portable.exe](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.0.5-Portable.exe) | [下载 .dmg](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.0.5.dmg) | [下载 .dmg](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.0.5-arm64.dmg) |
+| [下载 .exe](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.1.0-Setup.exe) | [下载 Portable.exe](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.1.0-Portable.exe) | [下载 .dmg](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.1.0.dmg) | [下载 .dmg](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.1.0-arm64.dmg) |
+
+### Mobile 版本
+
+| Android (APK) |
+|---------------|
+| [下载 APK](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-android.apk) |
+
+> **注意**：Android 版本需要安装 `PatentHub-android.apk` 文件到手机上。
 
 ## 技术栈
 
-- **框架**：Electron + React + TypeScript
+- **框架**：Electron + React + TypeScript + Capacitor
 - **构建工具**：electron-vite + electron-builder
 - **UI 组件**：Mantine UI
 - **AI SDK**：Vercel AI SDK
@@ -83,6 +92,7 @@ PatentHub/
 │   ├── preload/        # 预加载脚本
 │   └── renderer/      # 渲染进程（React应用）
 ├── assets/             # 静态资源
+├── android/           # Android 原生项目
 ├── release/           # 构建输出
 └── electron-builder.yml  # 打包配置
 ```

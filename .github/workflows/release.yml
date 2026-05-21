@@ -122,9 +122,92 @@ jobs:
             release/build/*.exe
           retention-days: 5
 
+  # Android build
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build renderer for mobile
+        run: pnpm run build:renderer
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Generate signing key
+        id: generate_key
+        run: |
+          # Generate keystore if not exists in secrets
+          if [ -z "${{ secrets.ANDROID_KEYSTORE }}" ]; then
+            echo "Generating new signing key..."
+            keytool -genkey -v -keystore android/app/patent-hub.keystore \
+              -alias patent-hub \
+              -keyalg RSA -keysize 2048 \
+              -validity 10000 \
+              -storepass PatentHub@2026 \
+              -keypass PatentHub@2026 \
+              -dname "CN=PatentHub, OU=PatentHub, O=PatentHub, L=Shanghai, ST=Shanghai, C=CN"
+          else
+            echo "Using existing signing key from secrets..."
+            echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 -d > android/app/patent-hub.keystore
+          fi
+
+      - name: Create signing config
+        run: |
+          cd android/app
+          # Create local.properties with keystore info
+          echo " keystorePassword=PatentHub@2026" >> gradle.properties
+          echo " keyAlias=patent-hub" >> gradle.properties
+          echo " keyPassword=PatentHub@2026" >> gradle.properties
+
+      - name: Build Android APK (Release)
+        run: |
+          cd android
+          ./gradlew assembleRelease
+
+      - name: Build Android APK (Debug)
+        run: |
+          cd android
+          ./gradlew assembleDebug
+
+      - name: Rename and copy APK
+        run: |
+          cp android/app/build/outputs/apk/release/app-release-unsigned.apk release/build/PatentHub-android.apk 2>/dev/null || \
+          cp android/app/build/outputs/apk/debug/app-debug.apk release/build/PatentHub-android.apk
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: |
+            release/build/PatentHub-android.apk
+          retention-days: 5
+
   # Create GitHub Release
   create-release:
-    needs: [build-mac, build-linux, build-win]
+    needs: [build-mac, build-linux, build-win, build-android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -157,3 +240,4 @@ jobs:
             release-files/**/*.dmg
             release-files/**/*.AppImage
             release-files/**/*.deb
+            release-files/**/*.apk

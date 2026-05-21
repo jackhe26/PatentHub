@@ -28,6 +28,7 @@ export interface GenerateImageParams {
   dalleStyle?: 'vivid' | 'natural'
   imageGenerateNum?: number
   aspectRatio?: string
+  size?: string
   parentIds?: string[]
 }
 
@@ -101,17 +102,44 @@ async function generateImages(recordId: string, params: GenerateImageParams): Pr
       has_reference: params.referenceImages.length > 0,
     })
 
+    // 添加调试日志
+    console.log('[ImageGen] Starting paint with model:', params.model.provider, params.model.modelId)
+
     await model.paint(
       {
         prompt: params.prompt,
         images: referenceImageUrls.length > 0 ? referenceImageUrls : undefined,
         num: params.imageGenerateNum || 1,
         aspectRatio: params.aspectRatio,
+        size: params.size,
       },
       undefined,
       async (picBase64: string) => {
+        // 调试：记录回调收到的数据格式
+        console.log('[ImageGen] Callback received:', {
+          length: picBase64?.length,
+          startsWith: picBase64?.substring(0, 100),
+          hasDataPrefix: picBase64?.startsWith('data:'),
+          isBase64: picBase64?.includes('base64,'),
+        })
+
         const storageKey = StorageKeyGenerator.picture(`image-gen:${recordId}`)
-        await storage.setBlob(storageKey, picBase64)
+        
+        // 在存储之前验证数据
+        if (!picBase64 || picBase64.length === 0) {
+          console.error('[ImageGen] ERROR: Received empty base64 data!')
+          return
+        }
+
+        // 确保是有效的 data URL 格式
+        let validDataUrl = picBase64
+        if (!picBase64.startsWith('data:')) {
+          console.warn('[ImageGen] WARNING: picBase64 does not start with data:, wrapping it')
+          validDataUrl = `data:image/png;base64,${picBase64}`
+        }
+
+        await storage.setBlob(storageKey, validDataUrl)
+        console.log('[ImageGen] Saved to storage, key:', storageKey)
 
         currentRecord = await addGeneratedImage(recordId, storageKey)
         if (currentRecord) {
@@ -131,6 +159,13 @@ async function generateImages(recordId: string, params: GenerateImageParams): Pr
   } catch (err: unknown) {
     const error = !(err instanceof Error) ? new Error(`${err}`) : err
     log.error('Image generation failed:', error)
+
+    // 添加更详细的错误信息
+    console.error('[ImageGen] ERROR DETAILS:', {
+      message: error.message,
+      stack: error.stack,
+      model: params.model,
+    })
 
     const errorCode = err instanceof ChatboxAIAPIError ? err.code : undefined
     const updatedRecord = await updateRecord(recordId, {

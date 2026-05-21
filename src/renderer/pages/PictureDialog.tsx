@@ -196,7 +196,7 @@ function _PictureDialog(props: {
               {/* 这里不能使用异步的 ImageInStorage，否则会导致图片位置不对 */}
               <Img
                 src={url}
-                className="max-w-[90vw] max-h-[90vh] w-auto h-auto object-contain"
+                className="max-w-[95vw] max-h-[95vh] w-auto h-auto object-contain"
                 onClick={(e) => {
                   e.preventDefault()
                   e.stopPropagation()

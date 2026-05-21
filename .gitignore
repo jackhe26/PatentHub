@@ -47,3 +47,10 @@ winCodeSign-*.7z
 # Release folder
 release/app/dist/
 release/app/node_modules/
+
+# Android/Capacitor
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+*.keystore

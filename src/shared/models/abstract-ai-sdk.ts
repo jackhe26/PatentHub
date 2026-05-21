@@ -1,4 +1,5 @@
 import type { LanguageModelV3 } from '@ai-sdk/provider'
+import { editWithEditsAPI } from './imageEditApi'
 import {
   APICallError,
   type EmbeddingModel,
@@ -69,6 +70,78 @@ interface ToolExecutionResult {
   toolCallId: string
   result: unknown
   isError?: boolean
+}
+
+/**
+ * 验证 base64 字符串是否有效
+ * 检查是否只包含有效的 base64 字符
+ */
+function isValidBase64(str: string): boolean {
+  // Base64 有效字符：A-Z, a-z, 0-9, +, /, = (padding)
+  // 允许末尾有最多2个 = 作为 padding
+  if (!str) return false
+  
+  // 移除 padding 后检查
+  const base64WithoutPadding = str.replace(/=+$/, '')
+  
+  // 检查是否只包含有效的 base64 字符
+  const base64Regex = /^[A-Za-z0-9+/]*$/
+  return base64Regex.test(base64WithoutPadding)
+}
+
+/**
+ * 安全地将图片数据转换为 data URL
+ * 处理多种情况：base64、data URL、URL、以及包含空白字符的 base64
+ */
+async function processImageData(image: { base64?: string; mediaType?: string }): Promise<string> {
+  if (!image.base64) {
+    throw new ApiError('Image generation result does not contain base64 data')
+  }
+
+  // 清理字符串：移除前后空白
+  let data = image.base64.trim()
+
+  // 情况1：已经是完整的 data URL
+  if (data.startsWith('data:')) {
+    return data
+  }
+
+  // 情况2：检测 http/https URL（某些 API 返回 URL 作为 base64 字段）
+  if (data.startsWith('http://') || data.startsWith('https://')) {
+    try {
+      const response = await fetch(data)
+      if (!response.ok) {
+        throw new Error(`HTTP error: ${response.status}`)
+      }
+      const blob = await response.blob()
+      const arrayBuffer = await blob.arrayBuffer()
+      const base64 = btoa(
+        new Uint8Array(arrayBuffer).reduce((str, byte) => str + String.fromCharCode(byte), '')
+      )
+      const mediaType = image.mediaType || blob.type || 'image/png'
+      return `data:${mediaType};base64,${base64}`
+    } catch (error) {
+      console.error('Failed to download image from URL:', data, error)
+      throw new ApiError(`Failed to download image from URL: ${data}`)
+    }
+  }
+
+  // 情况3：纯 base64 数据 - 清理空白字符
+  data = data.replace(/[\s\n\r]/g, '')
+
+  // 验证 base64 是否有效
+  if (!isValidBase64(data)) {
+    console.error('Invalid base64 data received:', {
+      originalLength: image.base64.length,
+      cleanedLength: data.length,
+      sample: data.substring(0, 100),
+    })
+    throw new ApiError('Invalid base64 data received from image generation API')
+  }
+
+  // 验证并返回
+  const mediaType = image.mediaType || 'image/png'
+  return `data:${mediaType};base64,${data}`
 }
 
 export default abstract class AbstractAISDKModel implements ModelInterface {
@@ -155,28 +228,158 @@ export default abstract class AbstractAISDKModel implements ModelInterface {
     }
   }
 
+  /**
+   * Try to use the /v1/images/edits API for image editing (when reference images are present).
+   * Falls back to the fallback model (gpt-image-2) if the current model fails.
+   */
+  protected async paintWithEdits(
+    params: {
+      prompt: string
+      images?: { imageUrl: string }[]
+      num: number
+      size?: string
+    },
+    signal?: AbortSignal,
+    callback?: (picBase64: string) => void
+  ): Promise<string[]> {
+    if (!params.images || params.images.length === 0) {
+      throw new ApiError('No reference images provided for edit mode')
+    }
+
+    // Extract base URL and API key from the provider
+    // Subclasses should override getEditModeBaseUrl() and getApiKey()
+    const baseUrl = this.getEditModeBaseUrl()
+    const apiKey = this.getApiKey()
+    const modelId = this.getEditModeModelId()
+    const imageUrls = params.images.map((img) => img.imageUrl)
+
+    if (!baseUrl || !apiKey) {
+      throw new ApiError('Provider does not support edit mode (missing base URL or API key)')
+    }
+
+    // Try current model first, fallback to gpt-image-2
+    const modelCandidates = [modelId, 'gpt-image-2']
+
+    let lastError: Error | null = null
+    for (const model of modelCandidates) {
+      try {
+        console.log(`[EditMode] Trying model: ${model} via ${baseUrl}/v1/images/edits`)
+        const dataUrls = await editWithEditsAPI({
+          baseUrl,
+          apiKey,
+          model,
+          images: imageUrls,
+          prompt: params.prompt,
+          n: params.num,
+          size: params.size,
+          signal,
+          onImage: callback,
+        })
+        return dataUrls
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error))
+        console.warn(`[EditMode] Model ${model} failed:`, lastError.message)
+        // If this was the fallback (gpt-image-2), re-throw
+        if (model === 'gpt-image-2') {
+          throw lastError
+        }
+        // Otherwise, continue to try gpt-image-2
+      }
+    }
+
+    // Should never reach here, but just in case
+    throw lastError || new ApiError('Edit mode failed with all model candidates')
+  }
+
+  /**
+   * Get the base URL for edit mode API calls.
+   * Subclasses should override this to provide the correct base URL.
+   */
+  protected getEditModeBaseUrl(): string | undefined {
+    return undefined
+  }
+
+  /**
+   * Get the API key for edit mode API calls.
+   * Subclasses should override this to provide the correct API key.
+   */
+  protected getApiKey(): string | undefined {
+    return undefined
+  }
+
+  /**
+   * Get the model ID to use for edit mode.
+   * Subclasses can override to customize.
+   */
+  protected getEditModeModelId(): string {
+    // Use the current model by default; subclasses should provide their actual model ID
+    return this.modelId || 'gpt-image-2'
+  }
+
   public async paint(
     params: {
       prompt: string
       images?: { imageUrl: string }[]
       num: number
       aspectRatio?: string
+      size?: string
     },
     signal?: AbortSignal,
     callback?: (picBase64: string) => void
   ): Promise<string[]> {
+    // Edit mode: if reference images are provided, use /v1/images/edits
+    if (params.images && params.images.length > 0) {
+      return this.paintWithEdits(
+        {
+          prompt: params.prompt,
+          images: params.images,
+          num: params.num,
+          size: params.size,
+        },
+        signal,
+        callback
+      )
+    }
+
+    // Text-to-image mode (no reference images)
     const imageModel = this.getImageModel()
     if (!imageModel) {
       throw new ApiError('Provider doesnt support image generation')
     }
-    const result = await generateImage({
+    // 构建 generateImage 参数
+    const generateParams: Parameters<typeof generateImage>[0] = {
       model: imageModel,
       prompt: params.prompt,
-      // images 暂时不支持
       n: params.num,
       abortSignal: signal,
-    })
-    const dataUrls = result.images.map((image) => `data:${image.mediaType};base64,${image.base64}`)
+    }
+
+    // 如果有 size 参数，传给 API（例如 "1024x1024"、"2560x1440" 等）
+    // 参考 gpt-image-2 实现：aspectRatio + resolution → SIZE_MAP → 实际像素尺寸
+    if (params.size) {
+      generateParams.size = params.size as `${number}x${number}`
+    }
+
+    const result = await generateImage(generateParams)
+
+    // 处理图片数据，支持 base64、data URL、URL 等多种格式
+    const dataUrls = await Promise.all(
+      result.images.map(async (image) => {
+        try {
+          return await processImageData(image)
+        } catch (error) {
+          console.error('Failed to process image data:', {
+            hasBase64: !!image.base64,
+            length: image.base64?.length,
+            startsWith: image.base64?.substring(0, 50),
+            mediaType: image.mediaType,
+            error,
+          })
+          throw error
+        }
+      })
+    )
+
     for (const dataUrl of dataUrls) {
       callback?.(dataUrl)
     }

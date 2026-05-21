@@ -44,6 +44,28 @@ export default class ChatboxAI extends AbstractAISDKModel implements ModelInterf
     super(options, dependencies)
   }
 
+  /**
+   * Override to provide the base URL for edit mode API calls.
+   * Uses the ChatboxAI gateway base URL.
+   */
+  protected getEditModeBaseUrl(): string | undefined {
+    return `${getChatboxAPIOrigin()}/gateway/openai/v1`
+  }
+
+  /**
+   * Override to provide the API key for edit mode.
+   */
+  protected getApiKey(): string | undefined {
+    return this.options.licenseKey
+  }
+
+  /**
+   * Override to provide the model ID for edit mode.
+   */
+  protected getEditModeModelId(): string {
+    return this.options.model.modelId
+  }
+
   private async chatboxAIFetch(url: RequestInfo | URL, options?: RequestInit) {
     return this.dependencies.request.fetchWithOptions(url.toString(), options, { parseChatboxRemoteError: true })
   }
@@ -105,13 +127,30 @@ export default class ChatboxAI extends AbstractAISDKModel implements ModelInterf
       images?: { imageUrl: string }[]
       num: number
       aspectRatio?: string
+      size?: string
     },
     signal?: AbortSignal,
     callback?: (picBase64: string) => void
   ): Promise<string[]> {
+    // For Gemini models (already has multi-modal image input), keep existing path
     if (this.options.model.apiStyle === 'google') {
       return this.paintWithGemini(params, signal, callback)
     }
+
+    // For image editing with reference images, use the base class edit mode
+    if (params.images && params.images.length > 0) {
+      return this.paintWithEdits(
+        {
+          prompt: params.prompt,
+          images: params.images,
+          num: params.num,
+          size: params.size,
+        },
+        signal,
+        callback
+      )
+    }
+
     return this.paintWithChatboxAPI(params, signal, callback)
   }
 

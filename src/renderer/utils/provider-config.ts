@@ -6,7 +6,7 @@ const modelInfoSchema = z.object({
   modelId: z.string(),
   nickname: z.string().optional(),
   type: z.enum(['chat', 'embedding', 'rerank']).optional().default('chat'),
-  capabilities: z.array(z.enum(['vision', 'reasoning', 'tool_use'])).optional(),
+  capabilities: z.array(z.enum(['vision', 'reasoning', 'tool_use', 'image'])).optional(),
   contextWindow: z.number().optional(),
   maxOutput: z.number().optional(),
 })
