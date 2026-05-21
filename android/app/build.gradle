@@ -20,6 +20,15 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+        }
+    }
+    signingConfigs {
+        release {
+            storeFile file("patent-hub.keystore")
+            storePassword "PatentHub@2026"
+            keyAlias "patent-hub"
+            keyPassword "PatentHub@2026"
         }
     }
 }
