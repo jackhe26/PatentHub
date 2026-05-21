@@ -197,6 +197,7 @@ jobs:
 
       - name: Rename and copy APK
         run: |
+          mkdir -p release/build
           cp android/app/build/outputs/apk/release/app-release-unsigned.apk release/build/PatentHub-android.apk 2>/dev/null || \
           cp android/app/build/outputs/apk/debug/app-debug.apk release/build/PatentHub-android.apk
 
