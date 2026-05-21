@@ -182,6 +182,9 @@ jobs:
           echo " keyAlias=patent-hub" >> gradle.properties
           echo " keyPassword=PatentHub@2026" >> gradle.properties
 
+      - name: Fix gradlew permissions
+        run: chmod +x android/gradlew
+
       - name: Build Android APK (Release)
         run: |
           cd android
