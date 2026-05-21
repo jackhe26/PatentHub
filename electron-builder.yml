@@ -72,6 +72,8 @@ linux:
         - arm64
   category: Development
   artifactName: ${productName}-${version}-${arch}.${ext}
+  maintainer: heyuan188@126.com
+  vendor: PatentHub
 
 directories:
   app: release/app
