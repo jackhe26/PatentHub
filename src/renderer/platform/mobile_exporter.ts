@@ -128,9 +128,10 @@ export default class MobileExporter implements Exporter {
       console.log('MobileExporter: File cached at', savedFile.uri)
 
       // 弹出系统分享面板，用户选择"保存到相册"或"下载"
+      // 注意：Android 上必须用 files 数组传本地文件路径，url 参数只用于网页链接
       await Share.share({
         title: '保存图片',
-        url: savedFile.uri,
+        files: [savedFile.uri],
         dialogTitle: '保存图片到相册或下载',
       })
     } catch (error) {

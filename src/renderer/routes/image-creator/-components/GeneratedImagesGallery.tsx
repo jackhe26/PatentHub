@@ -3,7 +3,7 @@ import { IconDownload, IconMaximize, IconPhoto } from '@tabler/icons-react'
 import { useQuery } from '@tanstack/react-query'
 import type PhotoSwipe from 'photoswipe'
 import type { UIElementData } from 'photoswipe'
-import { memo, useCallback, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Gallery, Item as GalleryItem } from 'react-photoswipe-gallery'
 import { useIsSmallScreen } from '@/hooks/useScreenChange'
@@ -23,6 +23,25 @@ export const GeneratedImagesGallery = memo(function GeneratedImagesGallery({
   const storageKeysRef = useRef(storageKeys)
   storageKeysRef.current = storageKeys
   const isSmallScreen = useIsSmallScreen()
+
+  // 移动端 PhotoSwipe 全屏时，通过 CSS 隐藏系统导航栏（沉浸式模式）
+  useEffect(() => {
+    if (!isSmallScreen) return
+
+    const style = document.createElement('style')
+    style.id = 'pswp-immersive'
+    style.textContent = `
+      .pswp {
+        /* 强制全屏覆盖系统导航栏区域 */
+        height: 100vh !important;
+        height: 100dvh !important;
+      }
+    `
+    document.head.appendChild(style)
+    return () => {
+      document.getElementById('pswp-immersive')?.remove()
+    }
+  }, [isSmallScreen])
 
   const uiElements: UIElementData[] = [
     {
@@ -46,7 +65,7 @@ export const GeneratedImagesGallery = memo(function GeneratedImagesGallery({
             platform.type === 'mobile'
               ? `${storageKey.replaceAll(':', '_')}_${Math.random().toString(36).substring(7)}`
               : storageKey
-          platform.exporter.exportImageFile(filename, base64)
+          await platform.exporter.exportImageFile(filename, base64)
         }
       },
     },
@@ -127,11 +146,15 @@ function GeneratedImageGalleryItem({ storageKey, onUseAsReference, isSmallScreen
   const imageFit = isSmallScreen ? 'cover' : 'contain'
 
   const handleDownload = useCallback(
-    (e: React.MouseEvent) => {
+    async (e: React.MouseEvent) => {
       e.stopPropagation()
       if (!imageData) return
       const filename = `image_${Date.now()}`
-      void platform.exporter.exportImageFile(filename, imageData.data)
+      try {
+        await platform.exporter.exportImageFile(filename, imageData.data)
+      } catch (error) {
+        console.error('Download failed:', error)
+      }
     },
     [imageData]
   )
@@ -218,7 +241,7 @@ function GeneratedImageGalleryItem({ storageKey, onUseAsReference, isSmallScreen
                 variant="white"
                 size="lg"
                 radius="xl"
-                onClick={handleDownload}
+                onClick={(e) => { void handleDownload(e) }}
                 className="shadow-lg hover:scale-105 transition-transform pointer-events-auto"
               >
                 <IconDownload size={18} />
