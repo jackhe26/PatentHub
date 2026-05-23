@@ -38,12 +38,15 @@ export default class MobileExporter implements Exporter {
   }
 
   async exportImageFile(basename: string, base64Data: string) {
+    console.log('MobileExporter: Starting exportImageFile', { basename, dataLength: base64Data?.length })
+    
     try {
       // 解析 base64 数据
       const { type, data } = base64.parseImage(base64Data)
 
       if (!data) {
         console.error('MobileExporter: invalid base64 data')
+        this.showToast('图片数据无效')
         return
       }
 
@@ -58,6 +61,7 @@ export default class MobileExporter implements Exporter {
           await this.exportBlob(filename, blob)
         } catch (error) {
           console.error('MobileExporter: Failed to download from URL:', error)
+          this.showToast('下载图片失败')
         }
         return
       }
@@ -80,9 +84,11 @@ export default class MobileExporter implements Exporter {
             files: [new File([blob], filename)],
             title: basename,
           })
+          this.showToast('图片已保存')
           return
         }
-      } catch {
+      } catch (shareError) {
+        console.log('MobileExporter: Web Share failed or cancelled:', shareError)
         // 分享失败或取消，fallback 到 Capacitor Filesystem
       }
 
@@ -90,6 +96,7 @@ export default class MobileExporter implements Exporter {
       await this.saveBase64ToDevice(filename, base64Data)
     } catch (error) {
       console.error('MobileExporter: Failed to export image:', error)
+      this.showToast('保存图片失败，请重试')
     }
   }
 
@@ -120,23 +127,46 @@ export default class MobileExporter implements Exporter {
   }
 
   /**
+   * 显示简单的提示信息
+   */
+  private showToast(message: string) {
+    // 尝试使用 Mantine 的通知系统，如果没有则使用原生 alert
+    const toastEvent = new CustomEvent('mobile-toast', { detail: { message } })
+    window.dispatchEvent(toastEvent)
+    console.log('MobileExporter:', message)
+  }
+
+  /**
    * 将 base64 图像数据保存到设备，使用 Capacitor Filesystem
    * 首先尝试写入缓存目录，然后使用 Share 插件让用户选择保存位置
    */
   private async saveBase64ToDevice(filename: string, base64Data: string) {
+    console.log('MobileExporter: saveBase64ToDevice called', { filename })
+    
     try {
       const { type, data } = base64.parseImage(base64Data)
       const ext = (type.split('/')[1] || 'png').split('+')[0]
       const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_')
 
-      // 写入应用缓存目录
-      const savedFile = await Filesystem.writeFile({
-        path: safeFilename,
-        data: data || base64Data.replace(/^data:image\/[^;]+;base64,/, ''),
-        directory: Directory.Cache,
-      })
-
-      console.log('MobileExporter: File saved to cache:', savedFile.uri)
+      // 尝试写入外部存储目录（更方便用户找到）
+      let savedFile: { uri: string } | null = null
+      try {
+        savedFile = await Filesystem.writeFile({
+          path: safeFilename,
+          data: data || base64Data.replace(/^data:image\/[^;]+;base64,/, ''),
+          directory: Directory.External,
+        })
+        console.log('MobileExporter: File saved to external storage:', savedFile.uri)
+      } catch (externalError) {
+        console.log('MobileExporter: External storage failed, trying cache:', externalError)
+        // 回退到缓存目录
+        savedFile = await Filesystem.writeFile({
+          path: safeFilename,
+          data: data || base64Data.replace(/^data:image\/[^;]+;base64,/, ''),
+          directory: Directory.Cache,
+        })
+        console.log('MobileExporter: File saved to cache:', savedFile.uri)
+      }
 
       // 使用 Share 插件分享/保存文件
       try {
@@ -146,9 +176,10 @@ export default class MobileExporter implements Exporter {
           url: savedFile.uri,
           dialogTitle: '保存图片到...',
         })
+        this.showToast('图片已保存')
       } catch (shareError) {
-        // 用户取消分享，文件仍在缓存中，可以提示用户
-        console.log('MobileExporter: Share cancelled or failed, file saved in cache:', savedFile.uri)
+        console.log('MobileExporter: Share cancelled or failed:', shareError)
+        this.showToast('文件已保存到: ' + savedFile.uri)
       }
     } catch (error) {
       console.error('MobileExporter: Failed to save image to device:', error)
@@ -161,6 +192,7 @@ export default class MobileExporter implements Exporter {
    * 最后的回退方案：使用传统方式下载（在部分Android WebView中可能仍有效）
    */
   private async fallbackDownload(base64Data: string) {
+    console.log('MobileExporter: Trying fallback download')
     try {
       const eleLink = document.createElement('a')
       eleLink.download = `image_${Date.now()}.png`
@@ -169,8 +201,10 @@ export default class MobileExporter implements Exporter {
       document.body.appendChild(eleLink)
       eleLink.click()
       document.body.removeChild(eleLink)
+      this.showToast('图片已通过浏览器下载')
     } catch (error) {
       console.error('MobileExporter: Fallback download also failed:', error)
+      this.showToast('所有保存方式均失败')
     }
   }
 }
