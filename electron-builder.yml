@@ -43,7 +43,6 @@ win:
     - target: portable
       arch:
         - x64
-  vendor: 专利审查四川中心
   publisherName: 专利审查四川中心
 
 nsis:
