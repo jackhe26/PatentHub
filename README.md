@@ -20,7 +20,7 @@
   <a href="#"><img alt="Linux" src="https://img.shields.io/badge/Linux-FCC624?style=flat-square&logo=linux&logoColor=black" /></a>
   <a href="#"><img alt="Android" src="https://img.shields.io/badge/Android-3DDC84?style=flat-square&logo=android&logoColor=white" /></a>
   <a href="#"><img alt="License" src="https://img.shields.io/badge/License-GPLv3-green?style=flat-square" /></a>
-  <img alt="Version" src="https://img.shields.io/badge/Version-1.1.5-blue?style=flat-square" />
+  <img alt="Version" src="https://img.shields.io/badge/Version-1.1.6-blue?style=flat-square" />
 </p>
 
 <p align="center">
@@ -49,12 +49,14 @@ PatentHub 是一款基于 AI 大语言模型的桌面/移动应用程序，专�
 
 | 平台 | 安装包 | 说明 |
 |------|--------|------|
-| <img src="https://img.icons8.com/color/24/windows-10.png" width="20"/> **Windows** | [📥 下载 Setup.exe](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.1.5-Setup.exe) | 安装版，支持自定义安装目录 |
-| <img src="https://img.icons8.com/color/24/windows-10.png" width="20"/> **Windows (便携版)** | [📥 下载 Portable.exe](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.1.5-Portable.exe) | 免安装，即开即用 |
-| <img src="https://img.icons8.com/mac-os/24/mac-os.png" width="20"/> **macOS (Intel)** | [📥 下载 .dmg](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.1.5.dmg) | 适用于 Intel 芯片 Mac |
-| <img src="https://img.icons8.com/mac-os/24/mac-os.png" width="20"/> **macOS (Apple Silicon)** | [📥 下载 .dmg](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.1.5-arm64.dmg) | 适用于 M1/M2/M3/M4 芯片 Mac |
-| <img src="https://img.icons8.com/color/24/linux--v1.png" width="20"/> **Linux (AppImage)** | [📥 下载 .AppImage](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.1.5-x86_64.AppImage) | 通用 Linux 格式 |
-| <img src="https://img.icons8.com/color/24/linux--v1.png" width="20"/> **Linux (deb)** | [📥 下载 .deb](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.1.5-amd64.deb) | Debian/Ubuntu 系 |
+| <img src="https://img.icons8.com/color/24/windows-10.png" width="20"/> **Windows** | [📥 下载 Setup.exe](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.1.6-Setup.exe) | 安装版，支持自定义安装目录 |
+| <img src="https://img.icons8.com/color/24/windows-10.png" width="20"/> **Windows (便携版)** | [📥 下载 Portable.exe](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.1.6-Portable.exe) | 免安装，即开即用 |
+| <img src="https://img.icons8.com/mac-os/24/mac-os.png" width="20"/> **macOS (Intel)** | [📥 下载 .dmg](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.1.6.dmg) | 适用于 Intel 芯片 Mac |
+| <img src="https://img.icons8.com/mac-os/24/mac-os.png" width="20"/> **macOS (Apple Silicon)** | [📥 下载 .dmg](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.1.6-arm64.dmg) | 适用于 M1/M2/M3/M4 芯片 Mac |
+| <img src="https://img.icons8.com/color/24/linux--v1.png" width="20"/> **Linux (AppImage, x64)** | [📥 下载 .AppImage](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.1.6-x64.AppImage) | 通用 Linux 格式 (x64) |
+| <img src="https://img.icons8.com/color/24/linux--v1.png" width="20"/> **Linux (AppImage, arm64)** | [📥 下载 .AppImage](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.1.6-arm64.AppImage) | 通用 Linux 格式 (arm64) |
+| <img src="https://img.icons8.com/color/24/linux--v1.png" width="20"/> **Linux (deb, x64)** | [📥 下载 .deb](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.1.6-amd64.deb) | Debian/Ubuntu 系 (x64) |
+| <img src="https://img.icons8.com/color/24/linux--v1.png" width="20"/> **Linux (deb, arm64)** | [📥 下载 .deb](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.1.6-arm64.deb) | Debian/Ubuntu 系 (arm64) |
 
 ### 📱 Mobile 版本
 
