@@ -9,9 +9,9 @@ import * as base64 from '@/packages/base64'
  * 使用 Capacitor 原生 API 实现文件保存
  *
  * 保存策略：
- * - 优先写入 Pictures/PatentHub 目录，触发媒体扫描，图片直接出现在相册
- * - 失败时 fallback 到 Documents/PatentHub
- * - 最终 fallback：Cache 目录 + 系统分享面板
+ * - Android 10+（API 29+）：写入 Pictures/PatentHub 目录，触发 MediaStore 扫描
+ * - Android 6-9（API 23-28）：写入 Pictures/PatentHub 目录（需要 WRITE_EXTERNAL_STORAGE 权限）
+ * - 失败时 fallback：写入 Cache 目录 + 系统分享面板
  */
 export default class MobileExporter implements Exporter {
   private async showToast(message: string) {
@@ -119,6 +119,8 @@ export default class MobileExporter implements Exporter {
           recursive: true,
         })
         console.log('MobileExporter: Saved to Pictures:', savedFile.uri)
+
+        // 触发 Android 媒体扫描，让图片出现在相册
         await this.triggerMediaScan(savedFile.uri)
         await this.showToast('图片已保存到相册')
         return
@@ -167,8 +169,8 @@ export default class MobileExporter implements Exporter {
   private async triggerMediaScan(fileUri: string) {
     try {
       if (Capacitor.getPlatform() === 'android') {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (Capacitor as any).nativePromise('MediaScanner', 'scanFile', { path: fileUri })
+        // 通过 Capacitor 调用 Android 原生媒体扫描
+        await Capacitor.nativePromise('MediaScanner', 'scanFile', { path: fileUri })
       }
     } catch (error) {
       // 媒体扫描失败不影响文件保存，只是相册可能需要刷新才能看到
