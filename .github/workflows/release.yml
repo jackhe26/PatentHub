@@ -141,8 +141,20 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Get version info
+        id: version_info
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          VERSION_PARTS=(${VERSION//./ })
+          VERSION_CODE=$((${VERSION_PARTS[0]}*10000+${VERSION_PARTS[1]}*100+${VERSION_PARTS[2]}))
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
+
       - name: Build renderer for mobile
         run: pnpm run build:renderer
+        env:
+          CHATBOX_BUILD_TARGET: mobile_app
+          CHATBOX_BUILD_PLATFORM: android
 
       - name: Sync Capacitor
         run: npx cap sync android
@@ -189,6 +201,9 @@ jobs:
         run: |
           cd android
           ./gradlew assembleRelease
+        env:
+          APP_VERSION_NAME: ${{ steps.version_info.outputs.version }}
+          APP_VERSION_CODE: ${{ steps.version_info.outputs.version_code }}
 
       - name: Build Android APK (Debug)
         run: |
