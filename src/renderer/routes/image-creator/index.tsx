@@ -120,7 +120,7 @@ function InputToolbar({
             className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-[var(--chatbox-background-tertiary)] transition-colors"
           >
             <IconSparkles size={16} className="text-[var(--chatbox-tint-secondary)]" />
-            <Text size="sm" className="text-[var(--chatbox-tint-secondary)] max-w-[120px] truncate">
+            <Text size="sm" className="text-[var(--chatbox-tint-secondary)] max-w-[72px] truncate">
               {modelDisplayName}
             </Text>
             <IconChevronRight size={14} className="text-[var(--chatbox-tint-tertiary)] rotate-90" />
