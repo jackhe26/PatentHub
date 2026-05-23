@@ -111,8 +111,8 @@ function InputToolbar({
 
   return (
     <Flex align="center" gap={0} className="shrink-0 w-full" justify="space-between">
-      {/* Left Group: Model, Ratio, Resolution, Reference */}
-      <Flex align="center" gap={0}>
+      {/* Left Group: Model, Reference, Ratio, Resolution */}
+      <Flex align="center" gap={0} className="flex-1 min-w-0">
         {/* Model Select */}
         {isSmallScreen ? (
           <UnstyledButton
@@ -137,7 +137,18 @@ function InputToolbar({
           </ImageModelSelect>
         )}
 
-        {/* Ratio Select */}
+        {/* Reference Image Button (moved to 2nd position) */}
+        <UnstyledButton
+          onClick={onAddReference}
+          className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-[var(--chatbox-background-tertiary)] transition-colors"
+        >
+          <IconPhoto size={16} className="text-[var(--chatbox-tint-secondary)]" />
+          <Text size="sm" className="text-[var(--chatbox-tint-secondary)]">
+            {t('Upload')}
+          </Text>
+        </UnstyledButton>
+
+        {/* Ratio Select (moved to 3rd position) */}
         {isSmallScreen ? (
           <UnstyledButton
             onClick={onRatioDrawerOpen}
@@ -172,7 +183,7 @@ function InputToolbar({
           </Menu>
         )}
 
-        {/* Resolution Select */}
+        {/* Resolution Select (moved to 4th position) */}
         {isSmallScreen ? (
           <UnstyledButton className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-[var(--chatbox-background-tertiary)] transition-colors">
             <IconDimensions size={16} className="text-[var(--chatbox-tint-secondary)]" />
@@ -202,17 +213,6 @@ function InputToolbar({
             </Menu.Dropdown>
           </Menu>
         )}
-
-        {/* Reference Image Button */}
-        <UnstyledButton
-          onClick={onAddReference}
-          className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-[var(--chatbox-background-tertiary)] transition-colors"
-        >
-          <IconPhoto size={16} className="text-[var(--chatbox-tint-secondary)]" />
-          <Text size="sm" className="text-[var(--chatbox-tint-secondary)]">
-            {t('Upload')}
-          </Text>
-        </UnstyledButton>
       </Flex>
 
       {/* Right Group: New Creation */}
