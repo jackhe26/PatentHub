@@ -1,0 +1,153 @@
+# Android 图片保存功能开发经验总结
+
+## 背景
+
+PatentHub Android 版本的图片生成模块，点击下载/保存按钮完全没有反应，也没有任何提示。
+
+---
+
+## 问题排查过程
+
+### 第一层：按钮点击事件是否触发？
+
+**现象**：放大、引用按钮都正常，唯独下载没反应。
+
+**结论**：按钮点击事件本身是触发的，问题在 `platform.exporter.exportImageFile()` 内部。
+
+---
+
+### 第二层：使用了哪个 Platform？
+
+**关键发现**：`platform/index.ts` 的逻辑：
+
+```ts
+if (CHATBOX_BUILD_TARGET === 'mobile_app') {
+  return new MobilePlatform()  // 使用 Capacitor 原生 API
+}
+return new WebPlatform()  // 使用 <a> 标签下载 ← 实际走这里！
+```
+
+**根本原因**：GitHub Actions CI 构建 Android 时，`build:renderer` 命令没有设置 `CHATBOX_BUILD_TARGET=mobile_app` 环境变量，导致打包出来的 APK 使用 `WebPlatform`，而 `WebPlatform` 用 `<a>` 标签 + `eleLink.click()` 下载，**在 Android WebView 中完全无效，没有任何反应，也没有任何错误提示**。
+
+**验证方式**：用户反馈 Android 版本显示版本号 1.0.0 而不是 1.1.6，证实安装的是旧版 APK，且 CI 构建环境变量缺失。
+
+**修复**：在 `.github/workflows/release.yml` 的 Android 构建步骤加入环境变量：
+
+```yaml
+- name: Build renderer for mobile
+  run: pnpm run build:renderer
+  env:
+    CHATBOX_BUILD_TARGET: mobile_app
+    CHATBOX_BUILD_PLATFORM: android
+```
+
+---
+
+### 第三层：MobileExporter 的 Share API 参数错误
+
+**现象**：修复环境变量后，点击下载弹出了系统分享面板，但面板里只有微信、打印等通用应用，没有"保存到相册"选项。
+
+**根本原因**：`Share.share({ url: savedFile.uri })` 中 `url` 参数在 Android 上用于分享**网页链接**，不是本地文件。要分享本地文件必须用 `files` 数组：
+
+```ts
+// 错误
+await Share.share({ url: savedFile.uri })
+
+// 正确
+await Share.share({ files: [savedFile.uri] })
+```
+
+Android 系统分享面板需要知道文件类型才会显示相册保存选项，`url` 参数不会触发文件类型识别。
+
+---
+
+### 第四层：用户体验优化 — 直接保存到相册
+
+**用户需求**：不想要分享面板，希望点击直接保存到手机相册。
+
+**方案**：使用 `Filesystem.writeFile` 写入 `Directory.ExternalStorage` 的 `Pictures/PatentHub` 目录，然后触发 Android 媒体扫描，图片直接出现在相册。
+
+**保存策略（多级 fallback）**：
+1. 写入 `Pictures/PatentHub` → 触发媒体扫描 → Toast "图片已保存到相册"
+2. 失败则写入 `Documents/PatentHub` → Toast "图片已保存到文件夹"
+3. 最终 fallback：写入 Cache + 系统分享面板
+
+---
+
+## 其他修复
+
+### CI 构建失败：AndroidManifest.xml 主题引用错误
+
+**问题**：我在修复过程中错误地将 `android:theme="@style/AppTheme"` 改成了 `android:theme="@style.AppTheme"`（点号 vs 斜杠），导致 AAPT 资源链接失败。
+
+**教训**：Android 资源引用格式必须用斜杠 `@style/`，不能用点号 `@style.`。
+
+### requestLegacyExternalStorage 不兼容
+
+**问题**：我添加了 `android:requestLegacyExternalStorage="true"` 属性，但该属性在 `targetSdkVersion 35` 中已被废弃，导致 AAPT 验证失败。
+
+**教训**：Android 10+ 不需要 `requestLegacyExternalStorage`，应使用 `MediaStore` API 或 `Filesystem` 插件。
+
+### @capacitor-community/media 版本不兼容
+
+**尝试**：安装 `@capacitor-community/media` 插件直接保存到相册。
+
+**问题**：
+- v9.1.0 需要 `@capacitor/core >= 8.0.0`，项目用 7.4.5
+- v6.0.0 需要 `@capacitor/core ^6.0.0`，同样不兼容
+
+**结论**：放弃第三方插件，改用 Capacitor 内置的 `Filesystem` + `Toast` 插件实现。
+
+---
+
+## 经验总结
+
+### 1. 环境变量是移动端构建的关键
+
+Capacitor 项目的 CI 构建必须正确设置 `CHATBOX_BUILD_TARGET` 和 `CHATBOX_BUILD_PLATFORM`，否则会走 Web 平台逻辑，所有原生 API 调用都会失效且没有任何错误提示。
+
+### 2. Android 分享 API 的 url vs files 区别
+
+- `Share.share({ url: '...' })` → 分享网页链接，不触发文件类型识别
+- `Share.share({ files: ['...'] })` → 分享本地文件，Android 会根据 MIME 类型显示相关应用（相册、下载等）
+
+### 3. 调试无反应问题的思路
+
+当按钮点击完全没反应时，排查顺序：
+1. 确认按钮事件是否触发（对比其他正常按钮）
+2. 确认使用了哪个 Platform 实现（Web/Mobile/Desktop）
+3. 确认 Capacitor 插件是否正确初始化
+4. 添加 console.log 日志追踪每一步
+
+### 4. Android 存储权限版本差异
+
+| Android 版本 | 保存方式 |
+|---|---|
+| 6-9 (API 23-28) | `WRITE_EXTERNAL_STORAGE` + 直接写文件 |
+| 10-12 (API 29-32) | `MediaStore` API，无需权限 |
+| 13+ (API 33+) | `MediaStore` API + `READ_MEDIA_IMAGES` |
+
+使用 `Filesystem` 插件的 `Directory.ExternalStorage` 可以自动处理大部分版本差异。
+
+### 5. 版本号同步
+
+Android `build.gradle` 的 `versionName` 应从环境变量读取，与 `package.json` 保持同步，方便用户确认安装的是最新版本：
+
+```groovy
+versionName System.getenv("APP_VERSION_NAME") ?: "1.0"
+```
+
+---
+
+## 最终修复文件清单
+
+| 文件 | 修改内容 |
+|---|---|
+| `.github/workflows/release.yml` | 添加 `CHATBOX_BUILD_TARGET=mobile_app` 环境变量 |
+| `android/app/build.gradle` | `versionName` 从环境变量读取 |
+| `android/app/src/main/AndroidManifest.xml` | 添加存储权限，修复主题引用 |
+| `android/app/src/main/res/xml/file_paths.xml` | 添加 files-path 配置 |
+| `android/app/src/main/res/values/styles.xml` | 修复 SplashScreen 主题兼容性 |
+| `src/renderer/platform/mobile_exporter.ts` | 重写保存逻辑，直接保存到相册 |
+| `src/renderer/routes/image-creator/-components/GeneratedImagesGallery.tsx` | 修复 handleDownload，加 await |
+| `src/renderer/routes/image-creator/index.tsx` | 缩小移动端模型选择按钮宽度 |
