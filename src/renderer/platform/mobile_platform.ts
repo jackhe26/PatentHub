@@ -13,17 +13,6 @@ import MobileExporter from './mobile_exporter'
 import webLogger from './web_logger'
 import { parseTextFileLocally } from './web_platform_utils'
 
-// 动态导入 pdfjs-dist（从 pdf-parse 子依赖）
-let pdfjsLib: typeof import('pdfjs-dist') | null = null
-
-async function getPdfJsLib() {
-  if (!pdfjsLib) {
-    // 从 pdf-parse 的依赖中获取 pdfjs-dist
-    pdfjsLib = await import('pdfjs-dist')
-  }
-  return pdfjsLib
-}
-
 /**
  * 移动端平台实现（Android / iOS）
  * 使用 Capacitor 原生插件提供文件系统访问、分享等功能
@@ -182,20 +171,54 @@ export default class MobilePlatform extends IndexedDBStorage implements Platform
    * @returns 解析结果
    */
   async parsePdfWithPdfJs(file: File): Promise<{ content: string; error?: string }> {
+    console.log('[MobilePlatform] Starting PDF parsing, file:', file.name, 'size:', file.size)
+    
     try {
-      const pdfjs = await getPdfJsLib()
+      // 动态导入 pdfjs-dist
+      console.log('[MobilePlatform] Loading pdfjs-dist...')
+      const pdfjsLib = await import('pdfjs-dist')
+      console.log('[MobilePlatform] pdfjs-dist loaded:', pdfjsLib)
+      
+      // 检查 pdfjs-dist 是否正确加载
+      if (!pdfjsLib || !pdfjsLib.getDocument) {
+        console.error('[MobilePlatform] pdfjs-dist not loaded correctly')
+        return { content: '', error: 'PDF解析库加载失败，请尝试使用云解析' }
+      }
 
       // 将 File 对象转为 ArrayBuffer
-      const arrayBuffer = await file.arrayBuffer()
+      console.log('[MobilePlatform] Converting file to ArrayBuffer...')
+      let arrayBuffer: ArrayBuffer
+      
+      try {
+        arrayBuffer = await file.arrayBuffer()
+        console.log('[MobilePlatform] ArrayBuffer created, length:', arrayBuffer.byteLength)
+      } catch (arrayBufferError) {
+        console.error('[MobilePlatform] ArrayBuffer error:', arrayBufferError)
+        return { content: '', error: `文件读取失败: ${arrayBufferError instanceof Error ? arrayBufferError.message : '未知错误'}` }
+      }
+
+      // 检查 ArrayBuffer 是否有效
+      if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+        return { content: '', error: 'PDF文件为空或读取失败' }
+      }
 
       // 加载 PDF 文档
-      const loadingTask = pdfjs.getDocument({ data: arrayBuffer })
-      const pdf = await loadingTask.promise
+      console.log('[MobilePlatform] Loading PDF document...')
+      let pdf: any
+      try {
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer })
+        pdf = await loadingTask.promise
+        console.log('[MobilePlatform] PDF loaded, pages:', pdf.numPages)
+      } catch (pdfLoadError) {
+        console.error('[MobilePlatform] PDF load error:', pdfLoadError)
+        return { content: '', error: `PDF文件格式错误: ${pdfLoadError instanceof Error ? pdfLoadError.message : '无法加载PDF文件'}` }
+      }
 
       // 提取每一页的文本
       const textParts: string[] = []
 
       for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        console.log('[MobilePlatform] Processing page:', pageNum)
         const page = await pdf.getPage(pageNum)
         const textContent = await page.getTextContent()
 
@@ -212,15 +235,26 @@ export default class MobilePlatform extends IndexedDBStorage implements Platform
       }
 
       const fullText = textParts.join('\n\n')
+      console.log('[MobilePlatform] Extracted text length:', fullText.length)
 
       if (!fullText || fullText.length === 0) {
-        return { content: '', error: 'PDF 文本提取失败：未能从 PDF 中提取到文本内容' }
+        return { content: '', error: 'PDF文本提取失败：PDF可能是扫描版或图片格式，请尝试使用云解析' }
       }
 
       return { content: fullText }
     } catch (error) {
       console.error('[MobilePlatform] PDF parsing error:', error)
-      return { content: '', error: `PDF 解析失败: ${error instanceof Error ? error.message : '未知错误'}` }
+      const errorMessage = error instanceof Error ? error.message : '未知错误'
+      
+      // 根据错误类型返回友好的错误信息
+      if (errorMessage.includes('Worker') || errorMessage.includes('worker')) {
+        return { content: '', error: 'PDF解析Worker加载失败，请尝试使用云解析' }
+      }
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('network')) {
+        return { content: '', error: '网络连接失败，请检查网络后重试' }
+      }
+      
+      return { content: '', error: `PDF解析失败: ${errorMessage}` }
     }
   }
 
