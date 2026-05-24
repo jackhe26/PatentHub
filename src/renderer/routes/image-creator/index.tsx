@@ -285,14 +285,17 @@ function ImageCreatorPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // Restore last used model on mount
+  // Restore last used model on mount (wait for providers to be loaded)
   useEffect(() => {
     const lastUsed = lastUsedModelStore.getState().picture
-    if (lastUsed) {
-      setSelectedProvider(lastUsed.provider)
-      setSelectedModel(lastUsed.modelId)
+    if (lastUsed && providers.length > 0) {
+      const providerExists = providers.some(p => p.id === lastUsed.provider)
+      if (providerExists) {
+        setSelectedProvider(lastUsed.provider)
+        setSelectedModel(lastUsed.modelId)
+      }
     }
-  }, [])
+  }, [providers])
 
   const handleModelSelect = useCallback((provider: string, model: string) => {
     setSelectedProvider(provider)
@@ -522,11 +525,8 @@ function ImageCreatorPage() {
     const model = providerModels.find((m) => m.modelId === selectedModel)
     const modelName = model?.nickname || IMAGE_MODEL_FALLBACK_NAMES[selectedModel] || selectedModel
 
-    if (selectedProvider === ModelProviderEnum.ChatboxAI) {
-      return modelName
-    }
-    const providerName = provider?.name || selectedProvider
-    return `${providerName} - ${modelName}`
+    // 只显示模型名称，不拼接提供方前缀（保持简洁）
+    return modelName
   }, [selectedProvider, selectedModel, providers])
 
   const headerRight = isSmallScreen ? (
