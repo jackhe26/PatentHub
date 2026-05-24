@@ -13,6 +13,17 @@ import MobileExporter from './mobile_exporter'
 import webLogger from './web_logger'
 import { parseTextFileLocally } from './web_platform_utils'
 
+// 动态导入 pdfjs-dist（从 pdf-parse 子依赖）
+let pdfjsLib: typeof import('pdfjs-dist') | null = null
+
+async function getPdfJsLib() {
+  if (!pdfjsLib) {
+    // 从 pdf-parse 的依赖中获取 pdfjs-dist
+    pdfjsLib = await import('pdfjs-dist')
+  }
+  return pdfjsLib
+}
+
 /**
  * 移动端平台实现（Android / iOS）
  * 使用 Capacitor 原生插件提供文件系统访问、分享等功能
@@ -163,6 +174,54 @@ export default class MobilePlatform extends IndexedDBStorage implements Platform
     const key = `parseFile-${uuidv4()}`
     await this.setStoreBlob(key, result.text)
     return { key, isSupported: true }
+  }
+
+  /**
+   * 使用 pdfjs-dist 在移动端解析 PDF 文件
+   * @param file PDF 文件对象
+   * @returns 解析结果
+   */
+  async parsePdfWithPdfJs(file: File): Promise<{ content: string; error?: string }> {
+    try {
+      const pdfjs = await getPdfJsLib()
+
+      // 将 File 对象转为 ArrayBuffer
+      const arrayBuffer = await file.arrayBuffer()
+
+      // 加载 PDF 文档
+      const loadingTask = pdfjs.getDocument({ data: arrayBuffer })
+      const pdf = await loadingTask.promise
+
+      // 提取每一页的文本
+      const textParts: string[] = []
+
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum)
+        const textContent = await page.getTextContent()
+
+        // 合并文本项
+        const pageText = textContent.items
+          .map((item: any) => item.str)
+          .join(' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+
+        if (pageText) {
+          textParts.push(pageText)
+        }
+      }
+
+      const fullText = textParts.join('\n\n')
+
+      if (!fullText || fullText.length === 0) {
+        return { content: '', error: 'PDF 文本提取失败：未能从 PDF 中提取到文本内容' }
+      }
+
+      return { content: fullText }
+    } catch (error) {
+      console.error('[MobilePlatform] PDF parsing error:', error)
+      return { content: '', error: `PDF 解析失败: ${error instanceof Error ? error.message : '未知错误'}` }
+    }
   }
 
   public async isFullscreen() {

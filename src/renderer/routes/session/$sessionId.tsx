@@ -324,6 +324,13 @@ function RouteComponent() {
   const emojiMatch = currentCopilotName.match(/^([\u{1F300}-\u{1F9FF}])/u)
   const currentCopilotEmoji = emojiMatch ? emojiMatch[1] : null
 
+  // 辅助函数：获取搭档头像文字（跳过表情符号）
+  const getCopilotAvatarText = (name?: string) => {
+    if (!name) return '?'
+    // 移除常见表情符号后取第一个字符
+    return name.replace(/^[📋🔍✍️🔬📄💬⚖️🌐]/u, '').slice(0, 1) || '?'
+  }
+
   // 切换搭档
   const handleSelectCopilot = useCallback(async (copilot: CopilotDetail | undefined) => {
     if (!currentSession || !copilot) {
@@ -418,15 +425,10 @@ function RouteComponent() {
             <Menu shadow="lg" width={240} position="bottom-start">
               <Menu.Target>
                 <Button 
-                  variant="gradient" 
-                  gradient={{ from: 'blue', to: 'cyan', deg: 135 }} 
+                  variant="light" 
+                  color="gray"
                   size="sm" 
                   radius="md"
-                  leftSection={currentCopilotEmoji ? (
-                    <Text fw={700} size="lg">{currentCopilotEmoji}</Text>
-                  ) : (
-                    <Avatar size={20} color="white">{(selectedCopilot?.name || '?').slice(0, 1)}</Avatar>
-                  )}
                   className="font-semibold controls"
                 >
                   我的审查搭档
@@ -508,15 +510,10 @@ function RouteComponent() {
         <Menu shadow="lg" width={240} position="bottom-start">
           <Menu.Target>
             <Button 
-              variant="gradient" 
-              gradient={{ from: 'blue', to: 'cyan', deg: 135 }} 
+              variant="light" 
+              color="gray"
               size="sm" 
               radius="md"
-              leftSection={currentCopilotEmoji ? (
-                <Text fw={700} size="lg">{currentCopilotEmoji}</Text>
-              ) : (
-                <Avatar size={20} color="white">{(selectedCopilot?.name || '?').slice(0, 1)}</Avatar>
-              )}
               className="font-semibold controls"
             >
               {selectedCopilot ? selectedCopilot.name : t('选择搭档')}

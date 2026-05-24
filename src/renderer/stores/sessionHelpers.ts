@@ -274,12 +274,35 @@ export async function preprocessFile(
 
         case 'local': {
           // Local parsing - only available on desktop
-          // On mobile/web, this will fail and throw local_parser_failed
-          try {
-            result = await parseFileWithLocalParser(file, uniqKey)
-          } catch (error) {
-            // 重新抛出原始错误，让弹窗显示具体原因
-            throw error
+          // On mobile, use pdf.js for PDF files
+          // Check if this is a PDF file and we're on mobile
+          if (platform.type === 'mobile' && file.name.toLowerCase().endsWith('.pdf') && platform.parsePdfWithPdfJs) {
+            // Mobile PDF parsing using pdf.js
+            try {
+              const parseResult = await platform.parsePdfWithPdfJs(file)
+              if (parseResult.error) {
+                throw new Error(parseResult.error)
+              }
+              // Store the parsed content
+              await storage.setBlob(uniqKey, parseResult.content)
+              // Calculate token counts
+              const tokenCountMap: Record<string, number> = {
+                [TOKEN_CACHE_KEYS.default]: estimateTokens(parseResult.content),
+                [TOKEN_CACHE_KEYS.deepseek]: estimateTokens(parseResult.content, { provider: '', modelId: 'deepseek' }),
+              }
+              await storage.setItem(`${uniqKey}_tokenMap`, tokenCountMap)
+              result = { content: parseResult.content, storageKey: uniqKey, tokenCountMap }
+            } catch (error) {
+              throw new Error(`mobile_pdf_parsing_failed: ${error instanceof Error ? error.message : '未知错误'}`)
+            }
+          } else {
+            // Desktop local parsing
+            try {
+              result = await parseFileWithLocalParser(file, uniqKey)
+            } catch (error) {
+              // 重新抛出原始错误，让弹窗显示具体原因
+              throw error
+            }
           }
           break
         }
