@@ -101,6 +101,8 @@ public class PdfRendererPlugin extends Plugin {
             int height = (int) (page.getHeight() * scale);
 
             Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+            // Fill white background — JPEG has no alpha channel, transparent pixels become black
+            bitmap.eraseColor(android.graphics.Color.WHITE);
             page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
             page.close();
 
