@@ -155,45 +155,24 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
           return
         }
 
-        const blob = await storage.getBlob(storageKey)
-        if (!blob) {
-          setError('PDF file not found in storage')
+        // Read raw PDF bytes stored by preprocessFile (key = storageKey + '_pdf_raw')
+        // storageKey itself holds the parsed text content (for AI), not the PDF binary.
+        const rawBase64 = await storage.getBlob(`${storageKey}_pdf_raw`)
+        if (!rawBase64) {
+          setError('PDF raw data not found. Please re-upload the PDF file.')
           setLoading(false)
           return
         }
 
-        // Convert blob to base64 for the native plugin
-        // storage.getBlob() returns string | null; the string may be:
-        //   - a pure base64 string
-        //   - a Data URL ("data:application/pdf;base64,<data>")
-        //   - raw binary stored as a string (legacy)
-        let base64: string
-        const blobValue: unknown = blob
-        if (typeof blobValue === 'string') {
-          // Strip Data URL prefix if present, then re-encode bytes safely
-          const uint8Data = safeBase64Decode(blobValue)
-          let base64Binary = ''
-          for (let i = 0; i < uint8Data.length; i++) {
-            base64Binary += String.fromCharCode(uint8Data[i] & 0xFF)
-          }
-          base64 = btoa(base64Binary)
-        } else if (blobValue instanceof Uint8Array) {
-          let base64Binary = ''
-          for (let i = 0; i < blobValue.length; i++) {
-            base64Binary += String.fromCharCode(blobValue[i] & 0xFF)
-          }
-          base64 = btoa(base64Binary)
-        } else if (blobValue instanceof ArrayBuffer) {
-          const view = new Uint8Array(blobValue)
-          let base64Binary = ''
-          for (let i = 0; i < view.length; i++) {
-            base64Binary += String.fromCharCode(view[i] & 0xFF)
-          }
-          base64 = btoa(base64Binary)
-        } else {
-          setError('Unsupported blob format')
-          setLoading(false)
-          return
+        // rawBase64 is a pure base64 string (no Data URL prefix) stored by sessionHelpers
+        // Strip any accidental prefix and whitespace just in case
+        let base64 = rawBase64.includes(',') ? rawBase64.split(',')[1] : rawBase64
+        base64 = base64.replace(/\s/g, '')
+
+        // Sanity check: valid PDF base64 starts with "JVBERi" ("%PDF")
+        console.log('[PDF Preview] base64 prefix:', base64.substring(0, 8))
+        if (!base64.startsWith('JVBERi')) {
+          console.warn('[PDF Preview] base64 does not look like a PDF, prefix:', base64.substring(0, 8))
         }
 
         // Open PDF directly with base64 — Java handles Base64.decode, no WebView btoa

@@ -279,6 +279,21 @@ export async function preprocessFile(
           if (platform.type === 'mobile' && file.name.toLowerCase().endsWith('.pdf') && platform.parsePdfWithPdfJs) {
             // Mobile PDF parsing using pdf.js
             try {
+              // Also store the raw PDF bytes for native rendering (PDF preview panel)
+              // Key convention: uniqKey + '_pdf_raw' stores pure base64-encoded PDF bytes
+              try {
+                const arrayBuffer = await file.arrayBuffer()
+                const uint8 = new Uint8Array(arrayBuffer)
+                let bin = ''
+                for (let i = 0; i < uint8.length; i++) {
+                  bin += String.fromCharCode(uint8[i])
+                }
+                const rawBase64 = btoa(bin)
+                await storage.setBlob(`${uniqKey}_pdf_raw`, rawBase64)
+              } catch (rawErr) {
+                log.error('Failed to store raw PDF bytes for preview:', rawErr)
+              }
+
               const parseResult = await platform.parsePdfWithPdfJs(file)
               if (parseResult.error) {
                 throw new Error(parseResult.error)
