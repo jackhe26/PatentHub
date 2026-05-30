@@ -1,6 +1,6 @@
 import NiceModal from '@ebay/nice-modal-react'
 import { ActionIcon, Avatar, Box, Button, Card, Menu, Stack, Text, Group } from '@mantine/core'
-import { IconFileTypePdf, IconFileOff } from '@tabler/icons-react'
+import { IconFileTypePdf, IconFileOff, IconChevronLeft, IconChevronRight, IconMessage } from '@tabler/icons-react'
 import type { CopilotDetail, Message, ModelProvider, MessageFile } from '@shared/types'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { ForwardedRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -19,6 +19,7 @@ import { modifyMessage, removeCurrentThread, startNewThread, submitNewUserMessag
 import { getAllMessageList } from '@/stores/sessionHelpers'
 import platform from '@/platform'
 import storage from '@/storage'
+import { pdfRenderer } from '@/platform/PdfRendererBridge'
 
 export const Route = createFileRoute('/session/$sessionId')({
   component: RouteComponent,
@@ -48,99 +49,170 @@ function safeBase64Decode(base64: string): Uint8Array {
   return bytes
 }
 
-// PDF Preview Component - 优先使用文件路径加载，否则从 IndexedDB 加载
+// PDF Preview Component — Desktop: iframe, Mobile: Capacitor PdfRenderer native plugin
 function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  
-  // 获取 PDF 的 storageKey 和文件路径
+
+  // Mobile native rendering state
+  const [pageImage, setPageImage] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
+
   const storageKey = pdfFile.storageKey
-  const filePath = pdfFile.url  // Electron 文件路径
-  
-  console.log('[PDF Preview] filePath:', filePath, 'storageKey:', storageKey)
-  
+  const filePath = pdfFile.url
+  const isMobile = platform.type === 'mobile'
+
+  console.log('[PDF Preview] filePath:', filePath, 'storageKey:', storageKey, 'isMobile:', isMobile)
+
+  // Desktop: load via file:// or IndexedDB blob
   useEffect(() => {
+    if (isMobile) return // mobile uses native renderer below
+
     let url: string | null = null
-    
+
     const loadPdf = async () => {
-      console.log('[PDF Preview] Loading PDF, filePath:', filePath)
-      
-      // 优先使用文件路径加载 PDF（Electron 环境下）
       if (filePath) {
         try {
-          // 使用 file:// 协议加载本地文件
           const fileUrl = `file:///${filePath.replace(/\\/g, '/')}`
-          console.log('[PDF Preview] Using file URL:', fileUrl)
           setBlobUrl(fileUrl)
           setLoading(false)
           return
         } catch (err) {
-          console.error('[PDF Preview] Failed to load PDF from file path:', err)
-          // 回退到从 storage 加载
+          console.error('[PDF Preview] Failed to load from file path:', err)
         }
       }
-      
-      // 回退：从 IndexedDB 获取 blob
+
       if (!storageKey) {
-        setError('No storage key or file path available')
+        setError('No storage key or file path')
         setLoading(false)
         return
       }
-      
+
       try {
-        // 从 IndexedDB 获取 blob
         const blob = await storage.getBlob(storageKey)
         if (blob) {
           let pdfBlob: Blob
-          
           if (typeof blob === 'string') {
             try {
-              // 尝试使用安全的 base64 解码
               const bytes = safeBase64Decode(blob)
               pdfBlob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' })
-            } catch (decodeErr) {
-              // 如果 base64 解码失败，尝试直接作为二进制数据处理
-              console.error('[PDF Preview] Base64 decode failed, trying raw binary:', decodeErr)
-              const encoder = new TextEncoder()
-              pdfBlob = new Blob([encoder.encode(blob)], { type: 'application/pdf' })
+            } catch {
+              pdfBlob = new Blob([new TextEncoder().encode(blob)], { type: 'application/pdf' })
             }
           } else if (ArrayBuffer.isView(blob)) {
-            // 是 TypedArray
             pdfBlob = new Blob([blob], { type: 'application/pdf' })
           } else {
-            // 尝试作为 Blob 处理（假设是 Blob 或 ArrayBuffer）
-            try {
-              pdfBlob = new Blob([blob as BlobPart], { type: 'application/pdf' })
-            } catch {
-              // 最后尝试字符串转换
-              pdfBlob = new Blob([String(blob)], { type: 'application/pdf' })
-            }
+            pdfBlob = new Blob([blob as BlobPart], { type: 'application/pdf' })
           }
-          
-          // 创建 blob URL
           url = URL.createObjectURL(pdfBlob)
           setBlobUrl(url)
         } else {
           setError('PDF file not found in storage')
         }
       } catch (err) {
-        console.error('[PDF Preview] Error loading PDF:', err)
         setError(err instanceof Error ? err.message : 'Failed to load PDF')
       } finally {
         setLoading(false)
       }
     }
-    
+
     loadPdf()
-    
-    // 清理 blob URL
     return () => {
-      if (url) {
-        URL.revokeObjectURL(url)
+      if (url) URL.revokeObjectURL(url)
+    }
+  }, [storageKey, filePath, isMobile])
+
+  // Mobile: use native PdfRenderer plugin
+  useEffect(() => {
+    if (!isMobile) return
+
+    const loadNative = async () => {
+      setLoading(true)
+      try {
+        // Get PDF binary from IndexedDB, write to temp file for PdfRenderer
+        if (!storageKey) {
+          setError('No storage key available')
+          setLoading(false)
+          return
+        }
+
+        const blob = await storage.getBlob(storageKey)
+        if (!blob) {
+          setError('PDF file not found in storage')
+          setLoading(false)
+          return
+        }
+
+        // Convert blob to ArrayBuffer, write via Capacitor Filesystem
+        let uint8Data: Uint8Array
+        if (typeof blob === 'string') {
+          uint8Data = safeBase64Decode(blob)
+        } else if (blob instanceof Uint8Array) {
+          uint8Data = blob
+        } else if (blob instanceof ArrayBuffer) {
+          uint8Data = new Uint8Array(blob)
+        } else if (ArrayBuffer.isView(blob)) {
+          uint8Data = new Uint8Array(blob.buffer, blob.byteOffset, blob.byteLength)
+        } else {
+          setError('Unsupported blob format')
+          setLoading(false)
+          return
+        }
+
+        // Write to app cache via Capacitor
+        const { Filesystem, Directory } = await import('@capacitor/filesystem')
+        const base64 = btoa(
+          uint8Data.reduce((data, byte) => data + String.fromCharCode(byte), '')
+        )
+        const result = await Filesystem.writeFile({
+          path: `preview_${pdfFile.name}`,
+          data: base64,
+          directory: Directory.Cache,
+          recursive: true,
+        })
+        console.log('[PDF Preview] Temp file:', result.uri)
+
+        // Open with native PdfRenderer
+        const openResult = await pdfRenderer.open(result.uri)
+        setTotalPages(openResult.pageCount)
+        setCurrentPage(0)
+
+        // Render first page
+        const pageResult = await pdfRenderer.renderPage(0, 1.5)
+        setPageImage(pageResult.base64)
+        setLoading(false)
+
+      } catch (err) {
+        console.error('[PDF Preview] Native render error:', err)
+        setError(err instanceof Error ? err.message : 'Native PDF render failed')
+        setLoading(false)
       }
     }
-  }, [storageKey, filePath])
+
+    loadNative()
+
+    return () => {
+      pdfRenderer.close().catch(() => {})
+    }
+  }, [storageKey, pdfFile.name, isMobile])
+
+  // Navigate pages (mobile)
+  const goToPage = async (delta: number) => {
+    const newPage = currentPage + delta
+    if (newPage < 0 || newPage >= totalPages) return
+    setCurrentPage(newPage)
+    setLoading(true)
+    try {
+      const result = await pdfRenderer.renderPage(newPage, 1.5)
+      setPageImage(result.base64)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to render page')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <Card shadow="sm" padding="sm" radius="md" withBorder style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -149,36 +221,52 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
           <Text size="sm" fw="bold">PDF Preview</Text>
           <Text size="xs" c="dimmed">{pdfFile.name}</Text>
         </Group>
-        
-        <Box style={{ flex: 1, minHeight: 0, background: '#f5f5f5', borderRadius: 4 }}>
+
+        <Box style={{ flex: 1, minHeight: 0, background: '#f5f5f5', borderRadius: 4, overflow: 'hidden' }}>
           {loading ? (
             <Box style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Text size="sm" c="dimmed">Loading PDF...</Text>
             </Box>
           ) : error ? (
-            <Box style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Text size="sm" c="red">{error}</Text>
+            <Box style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+              <Text size="sm" c="red" ta="center">{error}</Text>
+            </Box>
+          ) : isMobile && pageImage ? (
+            <Box style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              {/* Page navigation */}
+              <Group gap="xs" p={6}>
+                <ActionIcon variant="light" size="sm" disabled={currentPage === 0} onClick={() => goToPage(-1)}>
+                  <IconChevronLeft size={18} />
+                </ActionIcon>
+                <Text size="xs" c="dimmed">{currentPage + 1} / {totalPages}</Text>
+                <ActionIcon variant="light" size="sm" disabled={currentPage >= totalPages - 1} onClick={() => goToPage(1)}>
+                  <IconChevronRight size={18} />
+                </ActionIcon>
+              </Group>
+              {/* Rendered page image */}
+              <Box style={{ flex: 1, overflow: 'auto', width: '100%' }}>
+                <img
+                  src={pageImage}
+                  alt={`Page ${currentPage + 1}`}
+                  style={{ width: '100%', display: 'block' }}
+                />
+              </Box>
+            </Box>
+          ) : isMobile && !pageImage ? (
+            <Box style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+              <Text size="sm" c="dimmed" ta="center">PDF 正在加载…</Text>
             </Box>
           ) : blobUrl ? (
-            platform.type === 'mobile' ? (
-              <Box style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-                <Text size="sm" c="dimmed" ta="center">
-                  移动端不支持 PDF 内嵌预览<br />
-                  文件内容已解析并发送给 AI，可正常对话
-                </Text>
-              </Box>
-            ) : (
-              <iframe
-                src={blobUrl}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  border: 'none',
-                  borderRadius: '4px'
-                }}
-                title="PDF Preview"
-              />
-            )
+            <iframe
+              src={blobUrl}
+              style={{
+                width: '100%',
+                height: '100%',
+                border: 'none',
+                borderRadius: '4px'
+              }}
+              title="PDF Preview"
+            />
           ) : null}
         </Box>
       </Stack>
@@ -413,9 +501,10 @@ function RouteComponent() {
 
   // If there's exactly one PDF file, show dual-pane layout
   if (singlePdfFile && currentSession) {
-    // 计算宽度
-    const pdfWidth = showPdfPanel ? '45%' : '0%'
-    const chatWidth = showPdfPanel ? '55%' : '100%'
+    // 计算宽度 — 桌面端双栏并排，手机端全屏切换（一个按钮切换 PDF ↔ 聊天）
+    const isMobile = platform.type === 'mobile'
+    const pdfWidth = showPdfPanel ? (isMobile ? '100%' : '45%') : '0%'
+    const chatWidth = showPdfPanel ? (isMobile ? '0%' : '55%') : '100%'
     
     return (
       <div className="flex flex-col h-full">
@@ -429,7 +518,7 @@ function RouteComponent() {
             title={showPdfPanel ? '隐藏PDF预览' : '显示PDF预览'}
             className="controls"
           >
-            {showPdfPanel ? <IconFileTypePdf size={20} /> : <IconFileOff size={20} />}
+            {showPdfPanel ? (platform.type === 'mobile' ? <IconMessage size={20} /> : <IconFileTypePdf size={20} />) : <IconFileOff size={20} />}
           </ActionIcon>
           <div style={{ marginLeft: '35%' }}>
             <Menu shadow="lg" width={240} position="bottom-start">
