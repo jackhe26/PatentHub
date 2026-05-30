@@ -139,6 +139,45 @@ public class PdfRendererPlugin extends Plugin {
     }
 
     /**
+     * Open PDF from base64 string — bypasses Filesystem.writeFile btoa/atob issues.
+     * Java's android.util.Base64.decode is more reliable than WebView btoa.
+     */
+    @PluginMethod
+    public void openWithBase64(PluginCall call) {
+        try {
+            close();
+
+            String base64Data = call.getString("data");
+            if (base64Data == null || base64Data.isEmpty()) {
+                call.reject("data (base64 string) is required");
+                return;
+            }
+
+            // Decode base64 on Android native side — no WebView btoa needed
+            byte[] pdfBytes = android.util.Base64.decode(base64Data, android.util.Base64.NO_WRAP);
+
+            // Write to cache file for PdfRenderer
+            File cacheDir = getContext().getCacheDir();
+            File tempFile = new File(cacheDir, "pdf_native_" + System.currentTimeMillis() + ".pdf");
+            java.io.FileOutputStream fos = new java.io.FileOutputStream(tempFile);
+            fos.write(pdfBytes);
+            fos.close();
+            currentFilePath = tempFile.getAbsolutePath();
+
+            fileDescriptor = ParcelFileDescriptor.open(tempFile, ParcelFileDescriptor.MODE_READ_ONLY);
+            pdfRenderer = new PdfRenderer(fileDescriptor);
+
+            JSObject result = new JSObject();
+            result.put("pageCount", pdfRenderer.getPageCount());
+            result.put("filePath", currentFilePath);
+            call.resolve(result);
+
+        } catch (Exception e) {
+            call.reject("Failed to open PDF from base64: " + e.getMessage());
+        }
+    }
+
+    /**
      * Close the PDF renderer and release resources.
      */
     @PluginMethod

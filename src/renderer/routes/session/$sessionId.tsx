@@ -124,14 +124,13 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
     }
   }, [storageKey, filePath, isMobile])
 
-  // Mobile: use native PdfRenderer plugin
+  // Mobile: use native PdfRenderer plugin via openWithBase64 (bypasses WebView btoa issues)
   useEffect(() => {
     if (!isMobile) return
 
     const loadNative = async () => {
       setLoading(true)
       try {
-        // Get PDF binary from IndexedDB, write to temp file for PdfRenderer
         if (!storageKey) {
           setError('No storage key available')
           setLoading(false)
@@ -145,7 +144,7 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
           return
         }
 
-        // Convert blob to ArrayBuffer, write via Capacitor Filesystem
+        // Convert blob to Uint8Array
         let uint8Data: Uint8Array
         if (typeof blob === 'string') {
           uint8Data = safeBase64Decode(blob)
@@ -161,26 +160,16 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
           return
         }
 
-        // Write to app cache via Capacitor — safe base64 encoding for any byte
-        const toBase64 = (bytes: Uint8Array): string => {
-          let binary = ''
-          for (let i = 0; i < bytes.length; i++) {
-            binary += String.fromCharCode(bytes[i] & 0xFF) // & 0xFF 强制截断到 Latin1 范围
-          }
-          return btoa(binary)
+        // Encode to base64 — safe method, & 0xFF ensures Latin1 range
+        let base64Binary = ''
+        for (let i = 0; i < uint8Data.length; i++) {
+          base64Binary += String.fromCharCode(uint8Data[i] & 0xFF)
         }
-        const { Filesystem, Directory } = await import('@capacitor/filesystem')
-        const base64 = toBase64(uint8Data)
-        const result = await Filesystem.writeFile({
-          path: `preview_${pdfFile.name}`,
-          data: base64,
-          directory: Directory.Cache,
-          recursive: true,
-        })
-        console.log('[PDF Preview] Temp file:', result.uri)
+        const base64 = btoa(base64Binary)
 
-        // Open with native PdfRenderer
-        const openResult = await pdfRenderer.open(result.uri)
+        // Open PDF directly with base64 — Java handles Base64.decode, no WebView btoa
+        const openResult = await pdfRenderer.openWithBase64(base64)
+        console.log('[PDF Preview] Opened PDF, pages:', openResult.pageCount)
         setTotalPages(openResult.pageCount)
         setCurrentPage(0)
 

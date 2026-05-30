@@ -6,6 +6,7 @@ import { registerPlugin } from '@capacitor/core'
 
 export interface PdfRendererPlugin {
   open(options: { filePath: string }): Promise<{ pageCount: number; filePath: string }>
+  openWithBase64(options: { data: string }): Promise<{ pageCount: number; filePath: string }>
   renderPage(options: { pageIndex: number; scale?: number }): Promise<{ base64: string; width: number; height: number; pageIndex: number }>
   getPageCount(): Promise<{ pageCount: number }>
   close(): Promise<void>
@@ -23,6 +24,14 @@ class PdfRendererBridge {
     const plugin = this.ensureAvailable()
     const result = await plugin.open({ filePath })
     console.log('[PdfRendererBridge] Opened PDF, pages:', result.pageCount)
+    return result
+  }
+
+  /** Open PDF directly from base64 string — Android native Base64.decode, no WebView btoa */
+  async openWithBase64(base64Data: string) {
+    const plugin = this.ensureAvailable()
+    const result = await plugin.openWithBase64({ data: base64Data })
+    console.log('[PdfRendererBridge] Opened PDF from base64, pages:', result.pageCount)
     return result
   }
 
