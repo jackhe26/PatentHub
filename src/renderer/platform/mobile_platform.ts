@@ -167,6 +167,11 @@ export default class MobilePlatform extends IndexedDBStorage implements Platform
 
   /**
    * 使用 pdfjs-dist 在移动端解析 PDF 文件
+   * 
+   * 方案：通过动态脚本注入加载 pdf.js（静态资源，绕过 Vite 打包）
+   * 原因：Vite 对 pdfjs-dist ESM 模块的二次打包会破坏 GlobalWorkerOptions，
+   *       导致 workerSrc 赋值无效，pdf.js 内部抛出 "NO 'GlobalWorkerOptions.workerSrc' specified."
+   * 
    * @param file PDF 文件对象
    * @returns 解析结果
    */
@@ -174,18 +179,36 @@ export default class MobilePlatform extends IndexedDBStorage implements Platform
     console.log('[MobilePlatform] Starting PDF parsing, file:', file.name, 'size:', file.size)
     
     try {
-      // 动态导入 pdfjs-dist legacy build（兼容 Vite 打包和 Android WebView）
-      console.log('[MobilePlatform] Loading pdfjs-dist legacy...')
-      const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs')
-      console.log('[MobilePlatform] pdfjs-dist loaded, getDocument:', typeof pdfjsLib.getDocument)
+      // 步骤1：动态加载 pdf.js bridge（静态资源，不被 Vite 处理）
+      console.log('[MobilePlatform] Loading pdf.js via script injection...')
+      let pdfjsLib = (window as any).pdfjsLib
       
-      // 检查 pdfjs-dist 是否正确加载
-      if (!pdfjsLib || !pdfjsLib.getDocument) {
-        console.error('[MobilePlatform] pdfjs-dist not loaded correctly')
-        return { content: '', error: 'PDF解析库加载失败，请尝试使用云解析' }
+      if (!pdfjsLib) {
+        await new Promise<void>((resolve, reject) => {
+          const script = document.createElement('script')
+          script.type = 'module'
+          script.src = '/pdfjs/pdf-bridge.mjs'
+          script.onload = () => {
+            console.log('[MobilePlatform] pdf.js bridge loaded')
+            pdfjsLib = (window as any).pdfjsLib
+            resolve()
+          }
+          script.onerror = (e) => {
+            console.error('[MobilePlatform] Failed to load pdf.js bridge:', e)
+            reject(new Error('PDF解析库加载失败'))
+          }
+          document.head.appendChild(script)
+        })
       }
 
-      // 将 File 对象转为 ArrayBuffer
+      // 检查 pdfjsLib 是否正确加载
+      if (!pdfjsLib || !pdfjsLib.getDocument) {
+        console.error('[MobilePlatform] pdfjs-dist not loaded, pdfjsLib:', typeof pdfjsLib)
+        return { content: '', error: 'PDF解析库加载失败，请尝试使用云解析' }
+      }
+      console.log('[MobilePlatform] pdfjsLib ready, workerSrc:', pdfjsLib.GlobalWorkerOptions?.workerSrc)
+
+      // 步骤2：将 File 对象转为 ArrayBuffer
       console.log('[MobilePlatform] Converting file to ArrayBuffer...')
       let arrayBuffer: ArrayBuffer
       
@@ -202,17 +225,11 @@ export default class MobilePlatform extends IndexedDBStorage implements Platform
         return { content: '', error: 'PDF文件为空或读取失败' }
       }
 
-      // 加载 PDF 文档
-      // disableWorker: true → 在主线程运行，完全绕过 Worker/workerSrc 问题
-      // isEvalSupported: false → 兼容 Android WebView 的 CSP 限制
+      // 步骤3：加载 PDF 文档
       console.log('[MobilePlatform] Loading PDF document...')
       let pdf: any
       try {
-        const loadingTask = pdfjsLib.getDocument({
-          data: arrayBuffer,
-          disableWorker: true,
-          isEvalSupported: false,
-        } as any)
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer })
         pdf = await loadingTask.promise
         console.log('[MobilePlatform] PDF loaded, pages:', pdf.numPages)
       } catch (pdfLoadError) {
