@@ -78,6 +78,13 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
   const [currentPage, setCurrentPage] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
 
+  // Touch gesture state
+  const touchStartX = useRef<number>(0)
+  const touchStartY = useRef<number>(0)
+  const touchStartDist = useRef<number>(0)
+  const [scale, setScale] = useState(1.3)
+  const baseScale = useRef(1.3)
+
   const storageKey = pdfFile.storageKey
   const filePath = pdfFile.url
   const isMobile = platform.type === 'mobile'
@@ -234,23 +241,62 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
               <Text size="sm" c="red" ta="center">{error}</Text>
             </Box>
           ) : isMobile && pageImage ? (
-            <Box style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              {/* Page navigation */}
-              <Group gap="xs" p={6}>
-                <ActionIcon variant="light" size="sm" disabled={currentPage === 0} onClick={() => goToPage(-1)}>
-                  <IconChevronLeft size={18} />
-                </ActionIcon>
-                <Text size="xs" c="dimmed">{currentPage + 1} / {totalPages}</Text>
-                <ActionIcon variant="light" size="sm" disabled={currentPage >= totalPages - 1} onClick={() => goToPage(1)}>
-                  <IconChevronRight size={18} />
-                </ActionIcon>
-              </Group>
-              {/* Rendered page image — width: 130% zooms in visually, overflow: auto allows panning */}
-              <Box style={{ flex: 1, overflow: 'auto', width: '100%' }}>
+            <Box
+              style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', overflow: 'hidden', userSelect: 'none' }}
+              onTouchStart={(e) => {
+                if (e.touches.length === 1) {
+                  touchStartX.current = e.touches[0].clientX
+                  touchStartY.current = e.touches[0].clientY
+                } else if (e.touches.length === 2) {
+                  // Pinch start — record initial distance
+                  const dx = e.touches[0].clientX - e.touches[1].clientX
+                  const dy = e.touches[0].clientY - e.touches[1].clientY
+                  touchStartDist.current = Math.sqrt(dx * dx + dy * dy)
+                  baseScale.current = scale
+                }
+              }}
+              onTouchMove={(e) => {
+                if (e.touches.length === 2) {
+                  // Pinch zoom
+                  const dx = e.touches[0].clientX - e.touches[1].clientX
+                  const dy = e.touches[0].clientY - e.touches[1].clientY
+                  const dist = Math.sqrt(dx * dx + dy * dy)
+                  const ratio = dist / touchStartDist.current
+                  const newScale = Math.min(4.0, Math.max(0.8, baseScale.current * ratio))
+                  setScale(newScale)
+                }
+              }}
+              onTouchEnd={(e) => {
+                if (e.changedTouches.length === 1 && e.touches.length === 0) {
+                  const dx = e.changedTouches[0].clientX - touchStartX.current
+                  const dy = e.changedTouches[0].clientY - touchStartY.current
+                  // Only trigger page turn if horizontal swipe dominates and distance > 50px
+                  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+                    if (dx < 0) {
+                      goToPage(1)   // swipe left → next page
+                    } else {
+                      goToPage(-1)  // swipe right → prev page
+                    }
+                  }
+                }
+              }}
+            >
+              {/* Page indicator — minimal, no buttons */}
+              <Text size="xs" c="dimmed" style={{ padding: '4px 0', flexShrink: 0 }}>
+                {currentPage + 1} / {totalPages}　← 左滑下页 · 右滑上页 →
+              </Text>
+              {/* Rendered page image — CSS transform scale, no scrollbars */}
+              <Box style={{ flex: 1, overflow: 'hidden', width: '100%', display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
                 <img
                   src={pageImage}
                   alt={`Page ${currentPage + 1}`}
-                  style={{ width: '130%', display: 'block' }}
+                  style={{
+                    width: '100%',
+                    display: 'block',
+                    transform: `scale(${scale})`,
+                    transformOrigin: 'top center',
+                    transition: 'transform 0.1s ease',
+                  }}
                 />
               </Box>
             </Box>
