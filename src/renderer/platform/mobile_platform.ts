@@ -175,7 +175,7 @@ export default class MobilePlatform extends IndexedDBStorage implements Platform
    * @param file PDF 文件对象
    * @returns 解析结果
    */
-  async parsePdfWithPdfJs(file: File): Promise<{ content: string; error?: string }> {
+  async parsePdfWithPdfJs(file: File): Promise<{ content: string; error?: string; textParts?: string[] }> {
     console.log('[MobilePlatform] Starting PDF parsing, file:', file.name, 'size:', file.size)
     
     try {
@@ -264,7 +264,8 @@ export default class MobilePlatform extends IndexedDBStorage implements Platform
         return { content: '', error: 'PDF文本提取失败：PDF可能是扫描版或图片格式，请尝试使用云解析' }
       }
 
-      return { content: fullText }
+      // Return both fullText and textParts array (per-page text for copy feature)
+      return { content: fullText, textParts }
     } catch (error) {
       console.error('[MobilePlatform] PDF parsing error:', error)
       const errorMessage = error instanceof Error ? error.message : '未知错误'

@@ -78,12 +78,27 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
   const [currentPage, setCurrentPage] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
 
+  // Feature 3: Per-page text for copy modal
+  const [pageTexts, setPageTexts] = useState<string[]>([])
+  const [showTextModal, setShowTextModal] = useState(false)
+
   // Touch gesture state
   const touchStartX = useRef<number>(0)
   const touchStartY = useRef<number>(0)
   const touchStartDist = useRef<number>(0)
-  const [scale, setScale] = useState(1.2)
-  const baseScale = useRef(1.2)
+  const [scale, setScale] = useState(1.1)
+  const baseScale = useRef(1.1)
+
+  // Feature 2: Finger-centered zoom (translate to keep pinch center under fingers)
+  const [translateX, setTranslateX] = useState(0)
+  const [translateY, setTranslateY] = useState(0)
+  const pinchOriginX = useRef<number>(0)
+  const pinchOriginY = useRef<number>(0)
+  const startTransX = useRef<number>(0)
+  const startTransY = useRef<number>(0)
+
+  // Feature 3: Long-press timer for text modal
+  const longPressTimer = useRef<ReturnType<typeof setTimeout>>()
 
   const storageKey = pdfFile.storageKey
   const filePath = pdfFile.url
@@ -164,22 +179,55 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
 
         // Read raw PDF bytes stored by preprocessFile (key = storageKey + '_pdf_raw')
         // storageKey itself holds the parsed text content (for AI), not the PDF binary.
-        const rawBase64 = await storage.getBlob(`${storageKey}_pdf_raw`)
-        if (!rawBase64) {
-          setError('PDF raw data not found. Please re-upload the PDF file.')
+        let rawRef = await storage.getBlob(`${storageKey}_pdf_raw`)
+        if (!rawRef) {
+          setError('PDF preview data not found. Please re-upload the PDF file.')
           setLoading(false)
           return
         }
 
-        // rawBase64 is a pure base64 string (no Data URL prefix) stored by sessionHelpers
-        // Strip any accidental prefix and whitespace just in case
-        let base64 = rawBase64.includes(',') ? rawBase64.split(',')[1] : rawBase64
-        base64 = base64.replace(/\s/g, '')
+        // Feature 1: Handle filesystem path reference (new format from Capacitor Filesystem)
+        let base64: string
+        if (rawRef.startsWith('filesystem:')) {
+          // New format: Read from Filesystem using native path
+          const filePath = rawRef.replace('filesystem:', '')
+          try {
+            const { Filesystem, Directory } = await import('@capacitor/filesystem')
+            const uriResult = await Filesystem.getUri({ path: filePath, directory: Directory.Data })
+            const openResult = await pdfRenderer.open(uriResult.uri)
+            console.log('[PDF Preview] Opened PDF from Filesystem, pages:', openResult.pageCount)
+            setTotalPages(openResult.pageCount)
+            setCurrentPage(0)
+            const pageResult = await pdfRenderer.renderPage(0, 2.0)
+            setPageImage(pageResult.base64)
 
-        // Sanity check: valid PDF base64 starts with "JVBERi" ("%PDF")
-        console.log('[PDF Preview] base64 prefix:', base64.substring(0, 8))
-        if (!base64.startsWith('JVBERi')) {
-          console.warn('[PDF Preview] base64 does not look like a PDF, prefix:', base64.substring(0, 8))
+            // Also load page texts for Feature 3
+            try {
+              const pagesJson = await storage.getBlob(`${storageKey}_pdf_pages`)
+              if (pagesJson) {
+                const pages = JSON.parse(pagesJson) as string[]
+                setPageTexts(pages)
+              }
+            } catch {}
+            setLoading(false)
+            return
+          } catch (fsErr) {
+            console.error('[PDF Preview] Failed to read from Filesystem:', fsErr)
+            setError('Failed to load PDF. Please re-upload.')
+            setLoading(false)
+            return
+          }
+        } else {
+          // Legacy format: base64 string stored in IndexedDB
+          let cleanBase64 = rawRef.includes(',') ? rawRef.split(',')[1] : rawRef
+          cleanBase64 = cleanBase64.replace(/\s/g, '')
+          base64 = cleanBase64
+
+          // Sanity check: valid PDF base64 starts with "JVBERi" ("%PDF")
+          console.log('[PDF Preview] base64 prefix:', base64.substring(0, 8))
+          if (!base64.startsWith('JVBERi')) {
+            console.warn('[PDF Preview] base64 does not look like a PDF, prefix:', base64.substring(0, 8))
+          }
         }
 
         // Open PDF directly with base64 — Java handles Base64.decode, no WebView btoa
@@ -191,6 +239,19 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
         // Render first page
         const pageResult = await pdfRenderer.renderPage(0, 2.0)
         setPageImage(pageResult.base64)
+
+        // Feature 3: Load per-page text for copy modal
+        try {
+          const pagesJson = await storage.getBlob(`${storageKey}_pdf_pages`)
+          if (pagesJson) {
+            const pages = JSON.parse(pagesJson) as string[]
+            setPageTexts(pages)
+            console.log('[PDF Preview] Loaded page texts:', pages.length, 'pages')
+          }
+        } catch (textErr) {
+          console.warn('[PDF Preview] Failed to load page texts:', textErr)
+        }
+
         setLoading(false)
 
       } catch (err) {
@@ -212,6 +273,11 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
     const newPage = currentPage + delta
     if (newPage < 0 || newPage >= totalPages) return
     setCurrentPage(newPage)
+    // Feature 4: Reset translate when page changes (so new page starts at center)
+    setTranslateX(0)
+    setTranslateY(0)
+    // Reset scale to default 1.1 when page changes
+    setScale(1.1)
     setLoading(true)
     try {
       const result = await pdfRenderer.renderPage(newPage, 2.0)
@@ -227,33 +293,58 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
   if (isMobile) {
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#fff' }}>
-        {/* Title bar: PDF name left, page indicator right */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', borderBottom: '1px solid #e5e7eb', flexShrink: 0, background: '#fff' }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '60%' }}>
-            {pdfFile.name}
-          </span>
-          {totalPages > 0 && (
-            <span style={{ fontSize: 12, color: '#6b7280', flexShrink: 0 }}>
-              {currentPage + 1} / {totalPages}
-            </span>
-          )}
-        </div>
-
         {/* PDF content area — full width, no scrollbars */}
         <div
           style={{ flex: 1, overflow: 'hidden', position: 'relative', background: '#f3f4f6', touchAction: 'none' }}
           onTouchStart={(e) => {
+            // Feature 3: Start long-press timer for text modal
+            if (e.touches.length === 1 && pageTexts.length > 0) {
+              longPressTimer.current = setTimeout(() => {
+                setShowTextModal(true)
+              }, 600)
+            }
+
             if (e.touches.length === 1) {
               touchStartX.current = e.touches[0].clientX
               touchStartY.current = e.touches[0].clientY
+              // Feature 4: Record current translate as pan start
+              startTransX.current = translateX
+              startTransY.current = translateY
             } else if (e.touches.length === 2) {
+              // Cancel long-press when pinch starts
+              if (longPressTimer.current) {
+                clearTimeout(longPressTimer.current)
+              }
               const dx = e.touches[0].clientX - e.touches[1].clientX
               const dy = e.touches[0].clientY - e.touches[1].clientY
               touchStartDist.current = Math.sqrt(dx * dx + dy * dy)
               baseScale.current = scale
+
+              // Feature 2: Record pinch center point for finger-centered zoom
+              pinchOriginX.current = (e.touches[0].clientX + e.touches[1].clientX) / 2
+              pinchOriginY.current = (e.touches[0].clientY + e.touches[1].clientY) / 2
+              startTransX.current = translateX
+              startTransY.current = translateY
             }
           }}
           onTouchMove={(e) => {
+            // Cancel long-press if finger moves (not a tap)
+            if (e.touches.length === 1 && longPressTimer.current) {
+              const dx = e.touches[0].clientX - touchStartX.current
+              const dy = e.touches[0].clientY - touchStartY.current
+              if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+                clearTimeout(longPressTimer.current)
+              }
+            }
+
+            // Feature 4: When zoomed (scale > 1.1), single finger pans instead of triggering page turn
+            if (e.touches.length === 1 && scale > 1.1) {
+              const dx = e.touches[0].clientX - touchStartX.current
+              const dy = e.touches[0].clientY - touchStartY.current
+              setTranslateX(startTransX.current + dx)
+              setTranslateY(startTransY.current + dy)
+            }
+
             if (e.touches.length === 2) {
               const dx = e.touches[0].clientX - e.touches[1].clientX
               const dy = e.touches[0].clientY - e.touches[1].clientY
@@ -261,11 +352,33 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
               const ratio = dist / touchStartDist.current
               const newScale = Math.min(4.0, Math.max(0.8, baseScale.current * ratio))
               setScale(newScale)
+
+              // Feature 2: Keep pinch center point under fingers by adjusting translate
+              // newTranslateX = pinchCenter - (pinchCenter - startTranslate) * (newScale / startScale)
+              if (baseScale.current > 0) {
+                const scaleFactor = newScale / baseScale.current
+                const newTransX = pinchOriginX.current - (pinchOriginX.current - startTransX.current) * scaleFactor
+                const newTransY = pinchOriginY.current - (pinchOriginY.current - startTransY.current) * scaleFactor
+                setTranslateX(newTransX)
+                setTranslateY(newTransY)
+              }
             }
           }}
           onTouchEnd={(e) => {
-            // Only handle single-finger swipe for page turn (not after pinch)
-            if (e.changedTouches.length === 1 && e.touches.length === 0) {
+            // Cancel long-press timer
+            if (longPressTimer.current) {
+              clearTimeout(longPressTimer.current)
+            }
+
+            // Feature 2 & 4: Reset translate when scale returns to <= 1.1
+            if (e.touches.length === 0 && scale <= 1.11) {
+              setTranslateX(0)
+              setTranslateY(0)
+            }
+
+            // Feature 4: Only handle single-finger swipe for page turn when scale <= 1.1
+            // When scale > 1.1, single finger pans instead of page turn
+            if (e.changedTouches.length === 1 && e.touches.length === 0 && scale <= 1.11) {
               const dx = e.changedTouches[0].clientX - touchStartX.current
               const dy = e.changedTouches[0].clientY - touchStartY.current
               if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
@@ -284,24 +397,115 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
               <span style={{ fontSize: 13, color: '#ef4444', textAlign: 'center' }}>{error}</span>
             </div>
           ) : pageImage ? (
-            <img
-              src={pageImage}
-              alt={`Page ${currentPage + 1}`}
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'contain',
-                display: 'block',
-                transform: `scale(${scale})`,
-                transformOrigin: 'top center',
-              }}
-            />
+            <>
+              <img
+                src={pageImage}
+                alt={`Page ${currentPage + 1}`}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  display: 'block',
+                  transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
+                  transformOrigin: 'top left',
+                }}
+              />
+              {/* UI: Page indicator overlay at bottom-right */}
+              {totalPages > 0 && (
+                <div style={{
+                  position: 'absolute',
+                  bottom: 8,
+                  right: 8,
+                  background: 'rgba(0,0,0,0.5)',
+                  color: '#fff',
+                  borderRadius: 10,
+                  padding: '2px 8px',
+                  fontSize: 11,
+                  pointerEvents: 'none',
+                  zIndex: 10,
+                }}>
+                  {currentPage + 1} / {totalPages}
+                </div>
+              )}
+            </>
           ) : (
             <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <span style={{ fontSize: 14, color: '#9ca3af' }}>PDF 正在加载…</span>
             </div>
           )}
         </div>
+
+        {/* Feature 3: Text copy modal */}
+        {showTextModal && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+            }}
+            onClick={() => setShowTextModal(false)}
+          >
+            <div
+              style={{
+                background: '#fff',
+                borderRadius: 12,
+                padding: 16,
+                width: '90%',
+                maxHeight: '80%',
+                display: 'flex',
+                flexDirection: 'column',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>
+                  第 {currentPage + 1} 页文本
+                </span>
+                <button
+                  onClick={() => setShowTextModal(false)}
+                  style={{
+                    background: '#f3f4f6',
+                    border: 'none',
+                    borderRadius: 6,
+                    padding: '4px 12px',
+                    fontSize: 12,
+                    color: '#6b7280',
+                    cursor: 'pointer',
+                  }}
+                >
+                  关闭
+                </button>
+              </div>
+              <textarea
+                readOnly
+                value={pageTexts[currentPage] || ''}
+                style={{
+                  flex: 1,
+                  minHeight: 200,
+                  padding: 12,
+                  border: '1px solid #e5e7eb',
+                  borderRadius: 8,
+                  fontSize: 13,
+                  color: '#374151',
+                  resize: 'none',
+                  fontFamily: 'system-ui, sans-serif',
+                  lineHeight: 1.5,
+                }}
+              />
+              <div style={{ marginTop: 8, fontSize: 11, color: '#9ca3af', textAlign: 'center' }}>
+                长按选择文字后复制
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }

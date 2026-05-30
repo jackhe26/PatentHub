@@ -279,9 +279,15 @@ export async function preprocessFile(
           if (platform.type === 'mobile' && file.name.toLowerCase().endsWith('.pdf') && platform.parsePdfWithPdfJs) {
             // Mobile PDF parsing using pdf.js
             try {
-              // Also store the raw PDF bytes for native rendering (PDF preview panel)
-              // Key convention: uniqKey + '_pdf_raw' stores pure base64-encoded PDF bytes
+              // Feature 1: Store raw PDF bytes for native rendering using Capacitor Filesystem
+              // This persists the PDF file in App's private directory, avoiding IndexedDB data loss
+              // Key convention: uniqKey + '_pdf_raw' stores "filesystem:pdf_cache/xxx.pdf" path
               try {
+                const { Filesystem, Directory } = await import('@capacitor/filesystem')
+                const safeFileName = `${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}_${file.size}_${file.lastModified}`
+                const cacheDir = 'pdf_cache'
+                const cacheFileName = `${cacheDir}/${safeFileName}.pdf`
+
                 const arrayBuffer = await file.arrayBuffer()
                 const uint8 = new Uint8Array(arrayBuffer)
                 let bin = ''
@@ -289,12 +295,35 @@ export async function preprocessFile(
                   bin += String.fromCharCode(uint8[i])
                 }
                 const rawBase64 = btoa(bin)
-                await storage.setBlob(`${uniqKey}_pdf_raw`, rawBase64)
+
+                await Filesystem.writeFile({
+                  path: cacheFileName,
+                  data: rawBase64,
+                  directory: Directory.Data,
+                  recursive: true,
+                })
+
+                // Store path reference (not raw base64) in IndexedDB
+                await storage.setBlob(`${uniqKey}_pdf_raw`, `filesystem:${cacheFileName}`)
+                log.debug('Stored PDF to Filesystem:', cacheFileName)
               } catch (rawErr) {
-                log.error('Failed to store raw PDF bytes for preview:', rawErr)
+                log.error('Failed to store PDF in Filesystem:', rawErr)
+                // Fallback: store raw base64 in IndexedDB (legacy path for old data or if Filesystem fails)
+                try {
+                  const arrayBuffer = await file.arrayBuffer()
+                  const uint8 = new Uint8Array(arrayBuffer)
+                  let bin = ''
+                  for (let i = 0; i < uint8.length; i++) {
+                    bin += String.fromCharCode(uint8[i])
+                  }
+                  const rawBase64 = btoa(bin)
+                  await storage.setBlob(`${uniqKey}_pdf_raw`, rawBase64)
+                } catch (fallbackErr) {
+                  log.error('Fallback storage also failed:', fallbackErr)
+                }
               }
 
-              const parseResult = await platform.parsePdfWithPdfJs(file)
+              const parseResult = (await platform.parsePdfWithPdfJs(file)) as { content: string; error?: string; textParts?: string[] }
               if (parseResult.error) {
                 throw new Error(parseResult.error)
               }
@@ -306,6 +335,12 @@ export async function preprocessFile(
                 [TOKEN_CACHE_KEYS.deepseek]: estimateTokens(parseResult.content, { provider: '', modelId: 'deepseek' }),
               }
               await storage.setItem(`${uniqKey}_tokenMap`, tokenCountMap)
+
+              // Store per-page text for copy feature (Feature 3: Long-press text modal)
+              if (parseResult.textParts && parseResult.textParts.length > 0) {
+                await storage.setBlob(`${uniqKey}_pdf_pages`, JSON.stringify(parseResult.textParts))
+              }
+
               result = { content: parseResult.content, storageKey: uniqKey, tokenCountMap }
             } catch (error) {
               throw new Error(`mobile_pdf_parsing_failed: ${error instanceof Error ? error.message : '未知错误'}`)
