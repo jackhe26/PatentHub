@@ -223,6 +223,90 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
     }
   }
 
+  // Mobile: full-screen, no card padding/border
+  if (isMobile) {
+    return (
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#fff' }}>
+        {/* Title bar: PDF name left, page indicator right */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', borderBottom: '1px solid #e5e7eb', flexShrink: 0, background: '#fff' }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '60%' }}>
+            {pdfFile.name}
+          </span>
+          {totalPages > 0 && (
+            <span style={{ fontSize: 12, color: '#6b7280', flexShrink: 0 }}>
+              {currentPage + 1} / {totalPages}
+            </span>
+          )}
+        </div>
+
+        {/* PDF content area — full width, no scrollbars */}
+        <div
+          style={{ flex: 1, overflow: 'hidden', position: 'relative', background: '#f3f4f6', touchAction: 'none' }}
+          onTouchStart={(e) => {
+            if (e.touches.length === 1) {
+              touchStartX.current = e.touches[0].clientX
+              touchStartY.current = e.touches[0].clientY
+            } else if (e.touches.length === 2) {
+              const dx = e.touches[0].clientX - e.touches[1].clientX
+              const dy = e.touches[0].clientY - e.touches[1].clientY
+              touchStartDist.current = Math.sqrt(dx * dx + dy * dy)
+              baseScale.current = scale
+            }
+          }}
+          onTouchMove={(e) => {
+            if (e.touches.length === 2) {
+              const dx = e.touches[0].clientX - e.touches[1].clientX
+              const dy = e.touches[0].clientY - e.touches[1].clientY
+              const dist = Math.sqrt(dx * dx + dy * dy)
+              const ratio = dist / touchStartDist.current
+              const newScale = Math.min(4.0, Math.max(0.8, baseScale.current * ratio))
+              setScale(newScale)
+            }
+          }}
+          onTouchEnd={(e) => {
+            // Only handle single-finger swipe for page turn (not after pinch)
+            if (e.changedTouches.length === 1 && e.touches.length === 0) {
+              const dx = e.changedTouches[0].clientX - touchStartX.current
+              const dy = e.changedTouches[0].clientY - touchStartY.current
+              if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+                if (dx < 0) goToPage(1)   // swipe left → next page
+                else goToPage(-1)          // swipe right → prev page
+              }
+            }
+          }}
+        >
+          {loading ? (
+            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ fontSize: 14, color: '#9ca3af' }}>Loading PDF...</span>
+            </div>
+          ) : error ? (
+            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+              <span style={{ fontSize: 13, color: '#ef4444', textAlign: 'center' }}>{error}</span>
+            </div>
+          ) : pageImage ? (
+            <img
+              src={pageImage}
+              alt={`Page ${currentPage + 1}`}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                display: 'block',
+                transform: `scale(${scale})`,
+                transformOrigin: 'top center',
+              }}
+            />
+          ) : (
+            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ fontSize: 14, color: '#9ca3af' }}>PDF 正在加载…</span>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // Desktop: card with iframe
   return (
     <Card shadow="sm" padding="sm" radius="md" withBorder style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Stack gap="xs" style={{ flex: 1, minHeight: 0 }}>
@@ -230,7 +314,6 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
           <Text size="sm" fw="bold">PDF Preview</Text>
           <Text size="xs" c="dimmed">{pdfFile.name}</Text>
         </Group>
-
         <Box style={{ flex: 1, minHeight: 0, background: '#f5f5f5', borderRadius: 4, overflow: 'hidden' }}>
           {loading ? (
             <Box style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -240,81 +323,8 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
             <Box style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
               <Text size="sm" c="red" ta="center">{error}</Text>
             </Box>
-          ) : isMobile && pageImage ? (
-            <Box
-              style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', overflow: 'hidden', userSelect: 'none' }}
-              onTouchStart={(e) => {
-                if (e.touches.length === 1) {
-                  touchStartX.current = e.touches[0].clientX
-                  touchStartY.current = e.touches[0].clientY
-                } else if (e.touches.length === 2) {
-                  // Pinch start — record initial distance
-                  const dx = e.touches[0].clientX - e.touches[1].clientX
-                  const dy = e.touches[0].clientY - e.touches[1].clientY
-                  touchStartDist.current = Math.sqrt(dx * dx + dy * dy)
-                  baseScale.current = scale
-                }
-              }}
-              onTouchMove={(e) => {
-                if (e.touches.length === 2) {
-                  // Pinch zoom
-                  const dx = e.touches[0].clientX - e.touches[1].clientX
-                  const dy = e.touches[0].clientY - e.touches[1].clientY
-                  const dist = Math.sqrt(dx * dx + dy * dy)
-                  const ratio = dist / touchStartDist.current
-                  const newScale = Math.min(4.0, Math.max(0.8, baseScale.current * ratio))
-                  setScale(newScale)
-                }
-              }}
-              onTouchEnd={(e) => {
-                if (e.changedTouches.length === 1 && e.touches.length === 0) {
-                  const dx = e.changedTouches[0].clientX - touchStartX.current
-                  const dy = e.changedTouches[0].clientY - touchStartY.current
-                  // Only trigger page turn if horizontal swipe dominates and distance > 50px
-                  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
-                    if (dx < 0) {
-                      goToPage(1)   // swipe left → next page
-                    } else {
-                      goToPage(-1)  // swipe right → prev page
-                    }
-                  }
-                }
-              }}
-            >
-              {/* Page indicator — minimal, no buttons */}
-              <Text size="xs" c="dimmed" style={{ padding: '4px 0', flexShrink: 0 }}>
-                {currentPage + 1} / {totalPages}　← 左滑下页 · 右滑上页 →
-              </Text>
-              {/* Rendered page image — CSS transform scale, no scrollbars */}
-              <Box style={{ flex: 1, overflow: 'hidden', width: '100%', display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
-                <img
-                  src={pageImage}
-                  alt={`Page ${currentPage + 1}`}
-                  style={{
-                    width: '100%',
-                    display: 'block',
-                    transform: `scale(${scale})`,
-                    transformOrigin: 'top center',
-                    transition: 'transform 0.1s ease',
-                  }}
-                />
-              </Box>
-            </Box>
-          ) : isMobile && !pageImage ? (
-            <Box style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-              <Text size="sm" c="dimmed" ta="center">PDF 正在加载…</Text>
-            </Box>
           ) : blobUrl ? (
-            <iframe
-              src={blobUrl}
-              style={{
-                width: '100%',
-                height: '100%',
-                border: 'none',
-                borderRadius: '4px'
-              }}
-              title="PDF Preview"
-            />
+            <iframe src={blobUrl} style={{ width: '100%', height: '100%', border: 'none', borderRadius: '4px' }} title="PDF Preview" />
           ) : null}
         </Box>
       </Stack>
@@ -617,8 +627,8 @@ function RouteComponent() {
         
         {/* Left: PDF Preview, Right: Chat - 根据showPdfPanel动态调整宽度 */}
         <div className="flex flex-1 min-h-0" style={{ flex: 1 }}>
-          {/* Left: PDF Preview - 显示/隐藏 */}
-          <div style={{ width: pdfWidth, padding: '0 8px', display: showPdfPanel ? 'block' : 'none', transition: 'width 0.2s ease' }}>
+          {/* Left: PDF Preview - 显示/隐藏；移动端去掉 padding 让 PDF 真正全屏 */}
+          <div style={{ width: pdfWidth, padding: isMobile ? 0 : '0 8px', display: showPdfPanel ? 'block' : 'none', transition: 'width 0.2s ease' }}>
             <PDFPreviewPanel pdfFile={singlePdfFile} />
           </div>
           
