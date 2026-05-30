@@ -174,13 +174,10 @@ export default class MobilePlatform extends IndexedDBStorage implements Platform
     console.log('[MobilePlatform] Starting PDF parsing, file:', file.name, 'size:', file.size)
     
     try {
-      // 动态导入 pdfjs-dist
-      console.log('[MobilePlatform] Loading pdfjs-dist...')
-      const pdfjsLib = await import('pdfjs-dist')
-      console.log('[MobilePlatform] pdfjs-dist loaded:', pdfjsLib)
-      
-      // 禁用 Worker，在移动端 WebView 中避免跨域/路径问题
-      pdfjsLib.GlobalWorkerOptions.workerSrc = ''
+      // 动态导入 pdfjs-dist legacy build（兼容 Vite 打包和 Android WebView）
+      console.log('[MobilePlatform] Loading pdfjs-dist legacy...')
+      const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs')
+      console.log('[MobilePlatform] pdfjs-dist loaded, getDocument:', typeof pdfjsLib.getDocument)
       
       // 检查 pdfjs-dist 是否正确加载
       if (!pdfjsLib || !pdfjsLib.getDocument) {
@@ -206,10 +203,16 @@ export default class MobilePlatform extends IndexedDBStorage implements Platform
       }
 
       // 加载 PDF 文档
+      // disableWorker: true → 在主线程运行，完全绕过 Worker/workerSrc 问题
+      // isEvalSupported: false → 兼容 Android WebView 的 CSP 限制
       console.log('[MobilePlatform] Loading PDF document...')
       let pdf: any
       try {
-        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer })
+        const loadingTask = pdfjsLib.getDocument({
+          data: arrayBuffer,
+          disableWorker: true,
+          isEvalSupported: false,
+        } as any)
         pdf = await loadingTask.promise
         console.log('[MobilePlatform] PDF loaded, pages:', pdf.numPages)
       } catch (pdfLoadError) {
