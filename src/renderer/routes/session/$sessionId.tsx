@@ -38,15 +38,33 @@ function getSinglePDFFile(session: { messages: Message[] }): MessageFile | null 
   return pdfFiles.length === 1 ? pdfFiles[0] : null
 }
 
-// Safe base64 decode function that handles Unicode characters
+// Safe base64 decode function that handles Unicode characters and Data URL prefixes
 function safeBase64Decode(base64: string): Uint8Array {
-  // Decode using atob, but handle Unicode characters properly
-  const binaryString = atob(base64)
-  const bytes = new Uint8Array(binaryString.length)
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i)
+  // Strip Data URL prefix if present (e.g. "data:application/pdf;base64,xxxxx")
+  const cleanBase64 = base64.includes(',') ? base64.split(',')[1] : base64
+  // Remove any whitespace (newlines, spaces) that would cause atob to fail
+  const normalized = cleanBase64.replace(/\s/g, '')
+
+  try {
+    const binaryString = atob(normalized)
+    const bytes = new Uint8Array(binaryString.length)
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i)
+    }
+    return bytes
+  } catch {
+    // atob failed — the stored value is a plain UTF-8 string, not base64
+    return new TextEncoder().encode(normalized)
   }
-  return bytes
+}
+
+// Extract pure base64 string from a value that may be a Data URL or raw base64
+function extractBase64(value: string): string {
+  if (value.includes(',')) {
+    // Data URL format: "data:<mime>;base64,<data>"
+    return value.split(',')[1] || ''
+  }
+  return value
 }
 
 // PDF Preview Component — Desktop: iframe, Mobile: Capacitor PdfRenderer native plugin
@@ -144,28 +162,39 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
           return
         }
 
-        // Convert blob to Uint8Array
-        let uint8Data: Uint8Array
-        if (typeof blob === 'string') {
-          uint8Data = safeBase64Decode(blob)
-        } else if (blob instanceof Uint8Array) {
-          uint8Data = blob
-        } else if (blob instanceof ArrayBuffer) {
-          uint8Data = new Uint8Array(blob)
-        } else if (ArrayBuffer.isView(blob)) {
-          uint8Data = new Uint8Array(blob.buffer, blob.byteOffset, blob.byteLength)
+        // Convert blob to base64 for the native plugin
+        // storage.getBlob() returns string | null; the string may be:
+        //   - a pure base64 string
+        //   - a Data URL ("data:application/pdf;base64,<data>")
+        //   - raw binary stored as a string (legacy)
+        let base64: string
+        const blobValue: unknown = blob
+        if (typeof blobValue === 'string') {
+          // Strip Data URL prefix if present, then re-encode bytes safely
+          const uint8Data = safeBase64Decode(blobValue)
+          let base64Binary = ''
+          for (let i = 0; i < uint8Data.length; i++) {
+            base64Binary += String.fromCharCode(uint8Data[i] & 0xFF)
+          }
+          base64 = btoa(base64Binary)
+        } else if (blobValue instanceof Uint8Array) {
+          let base64Binary = ''
+          for (let i = 0; i < blobValue.length; i++) {
+            base64Binary += String.fromCharCode(blobValue[i] & 0xFF)
+          }
+          base64 = btoa(base64Binary)
+        } else if (blobValue instanceof ArrayBuffer) {
+          const view = new Uint8Array(blobValue)
+          let base64Binary = ''
+          for (let i = 0; i < view.length; i++) {
+            base64Binary += String.fromCharCode(view[i] & 0xFF)
+          }
+          base64 = btoa(base64Binary)
         } else {
           setError('Unsupported blob format')
           setLoading(false)
           return
         }
-
-        // Encode to base64 — safe method, & 0xFF ensures Latin1 range
-        let base64Binary = ''
-        for (let i = 0; i < uint8Data.length; i++) {
-          base64Binary += String.fromCharCode(uint8Data[i] & 0xFF)
-        }
-        const base64 = btoa(base64Binary)
 
         // Open PDF directly with base64 — Java handles Base64.decode, no WebView btoa
         const openResult = await pdfRenderer.openWithBase64(base64)
