@@ -182,7 +182,7 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
         setCurrentPage(0)
 
         // Render first page
-        const pageResult = await pdfRenderer.renderPage(0, 1.5)
+        const pageResult = await pdfRenderer.renderPage(0, 2.0)
         setPageImage(pageResult.base64)
         setLoading(false)
 
@@ -207,7 +207,7 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
     setCurrentPage(newPage)
     setLoading(true)
     try {
-      const result = await pdfRenderer.renderPage(newPage, 1.5)
+      const result = await pdfRenderer.renderPage(newPage, 2.0)
       setPageImage(result.base64)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to render page')
@@ -245,12 +245,12 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
                   <IconChevronRight size={18} />
                 </ActionIcon>
               </Group>
-              {/* Rendered page image */}
+              {/* Rendered page image — width: 130% zooms in visually, overflow: auto allows panning */}
               <Box style={{ flex: 1, overflow: 'auto', width: '100%' }}>
                 <img
                   src={pageImage}
                   alt={`Page ${currentPage + 1}`}
-                  style={{ width: '100%', display: 'block' }}
+                  style={{ width: '130%', display: 'block' }}
                 />
               </Box>
             </Box>
