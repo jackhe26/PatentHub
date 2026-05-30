@@ -161,11 +161,16 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
           return
         }
 
-        // Write to app cache via Capacitor
+        // Write to app cache via Capacitor — safe base64 encoding for any byte
+        const toBase64 = (bytes: Uint8Array): string => {
+          let binary = ''
+          for (let i = 0; i < bytes.length; i++) {
+            binary += String.fromCharCode(bytes[i] & 0xFF) // & 0xFF 强制截断到 Latin1 范围
+          }
+          return btoa(binary)
+        }
         const { Filesystem, Directory } = await import('@capacitor/filesystem')
-        const base64 = btoa(
-          uint8Data.reduce((data, byte) => data + String.fromCharCode(byte), '')
-        )
+        const base64 = toBase64(uint8Data)
         const result = await Filesystem.writeFile({
           path: `preview_${pdfFile.name}`,
           data: base64,
