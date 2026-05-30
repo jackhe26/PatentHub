@@ -82,8 +82,8 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
   const touchStartX = useRef<number>(0)
   const touchStartY = useRef<number>(0)
   const touchStartDist = useRef<number>(0)
-  const [scale, setScale] = useState(1.3)
-  const baseScale = useRef(1.3)
+  const [scale, setScale] = useState(1.2)
+  const baseScale = useRef(1.2)
 
   const storageKey = pdfFile.storageKey
   const filePath = pdfFile.url
