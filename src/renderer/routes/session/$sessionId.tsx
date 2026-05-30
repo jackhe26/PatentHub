@@ -17,6 +17,7 @@ import { lastUsedModelStore } from '@/stores/lastUsedModelStore'
 import * as scrollActions from '@/stores/scrollActions'
 import { modifyMessage, removeCurrentThread, startNewThread, submitNewUserMessage } from '@/stores/sessionActions'
 import { getAllMessageList } from '@/stores/sessionHelpers'
+import platform from '@/platform'
 import storage from '@/storage'
 
 export const Route = createFileRoute('/session/$sessionId')({
@@ -159,16 +160,25 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
               <Text size="sm" c="red">{error}</Text>
             </Box>
           ) : blobUrl ? (
-            <iframe
-              src={blobUrl}
-              style={{
-                width: '100%',
-                height: '100%',
-                border: 'none',
-                borderRadius: '4px'
-              }}
-              title="PDF Preview"
-            />
+            platform.type === 'mobile' ? (
+              <Box style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+                <Text size="sm" c="dimmed" ta="center">
+                  移动端不支持 PDF 内嵌预览<br />
+                  文件内容已解析并发送给 AI，可正常对话
+                </Text>
+              </Box>
+            ) : (
+              <iframe
+                src={blobUrl}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  border: 'none',
+                  borderRadius: '4px'
+                }}
+                title="PDF Preview"
+              />
+            )
           ) : null}
         </Box>
       </Stack>
@@ -184,8 +194,8 @@ function RouteComponent() {
   const setLastUsedChatModel = useStore(lastUsedModelStore, (state) => state.setChatModel)
   const setLastUsedPictureModel = useStore(lastUsedModelStore, (state) => state.setPictureModel)
 
-  // PDF面板显示/隐藏状态
-  const [showPdfPanel, setShowPdfPanel] = useState(true)
+  // PDF面板显示/隐藏状态（移动端默认隐藏，避免双栏布局在小屏幕上显示空白iframe）
+  const [showPdfPanel, setShowPdfPanel] = useState(platform.type !== 'mobile')
 
   const currentMessageList = useMemo(() => (currentSession ? getAllMessageList(currentSession) : []), [currentSession])
   const lastGeneratingMessage = useMemo(
