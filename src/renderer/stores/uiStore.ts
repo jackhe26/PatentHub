@@ -42,7 +42,7 @@ export const uiStore = createStore(
           onSave?: () => void
         } | null,
         widthFull: false, // Stored UI preference
-        showCopilotsInNewSession: false,
+        showCopilotsInNewSession: true,
         sidebarWidth: null as number | null, // Custom sidebar width, null means use default
       },
       (set, get) => ({

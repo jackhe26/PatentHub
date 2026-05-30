@@ -3,7 +3,7 @@ import type { CopilotDetail } from '@shared/types'
 export const patentCopilots: CopilotDetail[] = [
   {
     id: 'patent-copilot:01-invention',
-    name: '📋 发明构思总结分析',
+    name: '1 发明构思总结',
     picUrl: undefined,
     prompt: `---
 name: summarizing-patent-ideas
@@ -96,7 +96,7 @@ metadata:
   },
   {
     id: 'patent-copilot:02-search-elements',
-    name: '🔍 提炼检索要素',
+    name: '2 提炼检索要素',
     picUrl: undefined,
     prompt: `名称：文献检索
 角色：精通科技类文献、信息检索专家
@@ -186,7 +186,7 @@ The ONEAR operator specifies an ordered proximity search:
   },
   {
     id: 'patent-copilot:03-non-patent-search',
-    name: '🔬 非专利文献检索',
+    name: '3 非专利文献检索',
     picUrl: undefined,
     prompt: `name: comprehensive-prior-art-search
 description: |
@@ -300,7 +300,7 @@ Google/Bing	全面搜索	使用高级语法如 filetype:pdf, site:researchgate.n
   },
   {
     id: 'patent-copilot:04-office-action-writing',
-    name: '✍️ 通知书撰写辅助',
+    name: '4 通知书撰写辅助',
     picUrl: undefined,
     prompt: `________________________________________
 #角色+背景
@@ -404,7 +404,7 @@ ________________________________________
   },
   {
     id: 'patent-copilot:05-disclosure-sufficiency',
-    name: '📄 公开不充分判断',
+    name: '5 公开不充分判断',
     picUrl: undefined,
     prompt: `---
 name: 公开不充分审查助手
@@ -517,7 +517,7 @@ description: >
   },
   {
     id: 'patent-copilot:06-formality-defects',
-    name: '📑 形式缺陷审查',
+    name: '6 形式缺陷审查',
     picUrl: undefined,
     prompt: `你是形式缺陷判定助手，具备知识库中的专利文本审查技能，根据用户上传的本申请文本进行撰写问题推送，申请文本可以是权利要求书内容或申请文本全文，对权利要求书和说明书的内容进行撰写问题审查，加粗提示文件可能存在不符合专利审查指南审查要求的问题部分。
 判定时，不要将可适用于或还包括有或可以为这类表述判定为问题，在判定时严格依据上传的文件本申请，不要改变原文文字。
@@ -809,7 +809,7 @@ ________________________________________
   },
   {
     id: 'patent-copilot:07-office-action-response',
-    name: '💬 审查意见答复',
+    name: '7 审查意见答复',
     picUrl: undefined,
     prompt: `---
 name: patent-office-action-response
@@ -882,7 +882,7 @@ description: >
   },
   {
     id: 'patent-copilot:08-claim-cgk',
-    name: '⚖️ 权利要求公知常识判断',
+    name: '8 权利要求常规判断',
     picUrl: undefined,
     prompt: `---
 name: patent-claim-cgk-analysis
@@ -996,7 +996,7 @@ description: |
   },
   {
     id: 'patent-copilot:09-translation',
-    name: '🌐 文献翻译（双向）',
+    name: '9 文献翻译（双向）',
     picUrl: undefined,
     prompt: `---
 name: paper-translation

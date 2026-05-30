@@ -22,7 +22,7 @@ export class BingSearch extends WebSearch {
     const dom = new DOMParser().parseFromString(html, 'text/html')
     const nodes = dom.querySelectorAll('#b_results>li.b_algo')
     return Array.from(nodes)
-      .slice(0, 10)
+      .slice(0, 50)
       .map((node) => {
         const nodeA = node.querySelector('h2>a')!
         const link = nodeA.getAttribute('href')!

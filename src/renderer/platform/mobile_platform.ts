@@ -179,6 +179,9 @@ export default class MobilePlatform extends IndexedDBStorage implements Platform
       const pdfjsLib = await import('pdfjs-dist')
       console.log('[MobilePlatform] pdfjs-dist loaded:', pdfjsLib)
       
+      // 禁用 Worker，在移动端 WebView 中避免跨域/路径问题
+      pdfjsLib.GlobalWorkerOptions.workerSrc = ''
+      
       // 检查 pdfjs-dist 是否正确加载
       if (!pdfjsLib || !pdfjsLib.getDocument) {
         console.error('[MobilePlatform] pdfjs-dist not loaded correctly')

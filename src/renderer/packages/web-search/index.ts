@@ -1,12 +1,12 @@
 import { cachified } from '@epic-web/cachified'
 import type { SearchResultItem } from '@shared/types'
 import { truncate } from 'lodash'
-import { getExtensionSettings, getLanguage, getLicenseKey } from '@/stores/settingActions'
+import { getExtensionSettings, getLanguage } from '@/stores/settingActions'
 import { ChatboxAIAPIError } from '../../../shared/models/errors'
 import type WebSearch from './base'
+import { BaiduSearch } from './baidu'
 import { BingSearch } from './bing'
 import { BingNewsSearch } from './bing-news'
-import { ChatboxSearch } from './chatbox-search'
 import { TavilySearch } from './tavily'
 
 const MAX_CONTEXT_ITEMS = 10
@@ -14,27 +14,20 @@ const MAX_CONTEXT_ITEMS = 10
 // 根据配置的搜索提供方来选择搜索服务
 function getSearchProviders() {
   const settings = getExtensionSettings()
-  const licenseKey = getLicenseKey()
 
   const selectedProviders: WebSearch[] = []
   const provider = settings.webSearch.provider
   const language = getLanguage()
 
   switch (provider) {
-    case 'build-in':
-      if (!licenseKey) {
-        throw ChatboxAIAPIError.fromCodeName(
-          'chatbox_search_license_key_required',
-          'chatbox_search_license_key_required'
-        )
-      }
-      selectedProviders.push(new ChatboxSearch(licenseKey))
-      break
     case 'bing':
       selectedProviders.push(new BingSearch())
       if (language !== 'zh-Hans') {
         selectedProviders.push(new BingNewsSearch()) // 国内无法使用
       }
+      break
+    case 'baidu':
+      selectedProviders.push(new BaiduSearch())
       break
     case 'tavily':
       if (!settings.webSearch.tavilyApiKey) {

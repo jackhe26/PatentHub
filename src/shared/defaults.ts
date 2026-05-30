@@ -120,7 +120,7 @@ export function settings(): Settings {
     },
     extension: {
       webSearch: {
-        provider: 'build-in',
+        provider: 'baidu',
         tavilyApiKey: '',
       },
       knowledgeBase: {

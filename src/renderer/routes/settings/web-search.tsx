@@ -52,7 +52,7 @@ export function RouteComponent() {
       <AdaptiveSelect
         comboboxProps={{ withinPortal: true, withArrow: true }}
         data={[
-          { value: 'build-in', label: 'Chatbox Search (Pro)' },
+          { value: 'baidu', label: 'Baidu Search (国内)' },
           { value: 'bing', label: 'Bing Search (Free)' },
           { value: 'tavily', label: 'Tavily' },
         ]}
@@ -72,15 +72,17 @@ export function RouteComponent() {
         label={t('Search Provider')}
         maw={320}
       />
-      {extension.webSearch.provider === 'build-in' && (
-        <Text size="xs" c="chatbox-gray">
-          {t('Chatbox Search is a paid feature with advanced capabilities and better performance.')}
-        </Text>
-      )}
       {extension.webSearch.provider === 'bing' && (
         <Text size="xs" c="chatbox-gray">
           {t(
             'Bing Search is provided for free use, but it may have limitations and is subject to change by Microsoft.'
+          )}
+        </Text>
+      )}
+      {extension.webSearch.provider === 'baidu' && (
+        <Text size="xs" c="chatbox-gray">
+          {t(
+            'Baidu Search is free and optimized for Chinese queries. Best for users in China.'
           )}
         </Text>
       )}

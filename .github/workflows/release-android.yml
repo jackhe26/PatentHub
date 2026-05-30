@@ -1,0 +1,153 @@
+name: Release Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: 'Version bump type (patch/minor/major) or "skip" to keep current'
+        required: true
+        default: 'skip'
+        type: choice
+        options:
+          - skip
+          - patch
+          - minor
+          - major
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Bump version (if requested)
+        if: inputs.version_bump != 'skip'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          npm version ${{ inputs.version_bump }} --no-git-tag-version
+          echo "NEW_VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_ENV
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          VERSION_PARTS=(${VERSION//./ })
+          VERSION_CODE=$((${VERSION_PARTS[0]}*10000+${VERSION_PARTS[1]}*100+${VERSION_PARTS[2]}))
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
+
+      - name: Build renderer for Android
+        run: pnpm run build:renderer
+        env:
+          CHATBOX_BUILD_TARGET: mobile_app
+          CHATBOX_BUILD_PLATFORM: android
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          target: 'android-34'
+          build-tools: '34.0.0'
+
+      - name: Generate signing key
+        run: |
+          if [ -z "$ANDROID_KEYSTORE" ]; then
+            echo "Generating new debug signing key..."
+            keytool -genkey -v -keystore android/app/patent-hub.keystore \
+              -alias patent-hub \
+              -keyalg RSA -keysize 2048 \
+              -validity 10000 \
+              -storepass PatentHub@2026 \
+              -keypass PatentHub@2026 \
+              -dname "CN=PatentHub, OU=PatentHub, O=PatentHub, L=Shanghai, ST=Shanghai, C=CN"
+          else
+            echo "Using signing key from secrets..."
+            echo "$ANDROID_KEYSTORE" | base64 -d > android/app/patent-hub.keystore
+          fi
+        env:
+          ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+
+      - name: Create signing config
+        run: |
+          cd android/app
+          echo "keystorePassword=PatentHub@2026" >> gradle.properties
+          echo "keyAlias=patent-hub" >> gradle.properties
+          echo "keyPassword=PatentHub@2026" >> gradle.properties
+
+      - name: Fix gradlew permissions
+        run: chmod +x android/gradlew
+
+      - name: Build Android APK (Release)
+        run: |
+          cd android
+          ./gradlew assembleRelease
+        env:
+          APP_VERSION_NAME: ${{ steps.version.outputs.version }}
+          APP_VERSION_CODE: ${{ steps.version.outputs.version_code }}
+
+      - name: Build Android APK (Debug fallback)
+        if: failure()
+        run: |
+          cd android
+          ./gradlew assembleDebug
+
+      - name: Copy APK to output
+        run: |
+          mkdir -p release/build
+          if [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
+            cp android/app/build/outputs/apk/release/app-release.apk release/build/PatentHub-v${{ steps.version.outputs.version }}-android.apk
+          elif [ -f android/app/build/outputs/apk/debug/app-debug.apk ]; then
+            cp android/app/build/outputs/apk/debug/app-debug.apk release/build/PatentHub-v${{ steps.version.outputs.version }}-android.apk
+          else
+            echo "No APK found!"
+            exit 1
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: PatentHub v${{ steps.version.outputs.version }} (Android)
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            release/build/PatentHub-v${{ steps.version.outputs.version }}-android.apk
+          body: |
+            ## 📱 Android 版本
+
+            > 此 Release 由 Android 独立构建工作流自动生成。
+
+            **安装说明**：
+            1. 下载 APK 文件
+            2. 在手机设置中打开「允许安装未知来源应用」
+            3. 点击 APK 完成安装
+
+            ### 更新内容
+            - 🐛 修复 Android 端 PDF 上传解析失败问题
+            - 🐛 修复 pdf.js Web Worker 在 Android WebView 中加载失败
+            - ✨ 优化文件解析错误弹窗（20+种中文提示 + 一键跳转设置）
