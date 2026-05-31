@@ -84,26 +84,27 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
   const [showTextModal, setShowTextModal] = useState(false)
   const [longPressY, setLongPressY] = useState<number>(0.5)  // Y ratio for paragraph location (0=top, 1=bottom)
   const [longPressX, setLongPressX] = useState<number>(0.5)  // X ratio for paragraph location (0=left, 1=right)
-  const [showFullParagraphList, setShowFullParagraphList] = useState(false)  // Toggle full paragraph list
-  // States for nearest paragraph display (N-1, N, N+1) and full paragraph list
-  const [nearestParagraph, setNearestParagraph] = useState<string>('')
-  const [allParagraphs, setAllParagraphs] = useState<string[]>([])
-  const [nearestParagraphIdx, setNearestParagraphIdx] = useState<number>(-1)
+  // Layer 2 state: which paragraph index is selected for full text display
+  const [selectedParagraphIdx, setSelectedParagraphIdx] = useState<number>(-1)
 
-  // Compute nearest paragraph text + all paragraphs whenever modal opens or position changes
+  // All paragraphs + nearest paragraph (recomputed when modal opens or position changes)
+  const [allParagraphsList, setAllParagraphsList] = useState<{ start: number; end: number; text: string }[]>([])
+  const [nearestParaIdx, setNearestParaIdx] = useState<number>(-1)
+
+  // Compute all paragraphs + nearest paragraph whenever modal opens or position changes
   useEffect(() => {
     if (!showTextModal || textBlocks.length === 0) {
-      setNearestParagraph('')
-      setAllParagraphs([])
-      setNearestParagraphIdx(-1)
+      setAllParagraphsList([])
+      setNearestParaIdx(-1)
+      setSelectedParagraphIdx(-1)
       return
     }
 
     const pageBlocks = textBlocks[currentPage]
     if (!pageBlocks || pageBlocks.length === 0) {
-      setNearestParagraph('')
-      setAllParagraphs([])
-      setNearestParagraphIdx(-1)
+      setAllParagraphsList([])
+      setNearestParaIdx(-1)
+      setSelectedParagraphIdx(-1)
       return
     }
 
@@ -113,13 +114,13 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
       const dy = Math.abs(pageBlocks[i].yRatio - pageBlocks[i - 1].yRatio)
       if (dy > 0 && dy < 0.1) lineHeights.push(dy)
     }
-    const avgLineHeight = lineHeights.length > 0 
-      ? lineHeights.sort((a, b) => a - b)[Math.floor(lineHeights.length / 2)] 
+    const avgLineHeight = lineHeights.length > 0
+      ? lineHeights.sort((a, b) => a - b)[Math.floor(lineHeights.length / 2)]
       : 0.05
     const paragraphGap = avgLineHeight * 1.5
 
-    // Step 2: Build all paragraphs from blocks (scan whole page)
-    const allParagraphsList: { start: number; end: number; text: string }[] = []
+    // Step 2: Build all paragraphs from blocks (scan whole page in correct reading order)
+    const paragraphs: { start: number; end: number; text: string }[] = []
     let paraStart = 0
     for (let i = 1; i <= pageBlocks.length; i++) {
       const isEndOfBlocks = i === pageBlocks.length
@@ -134,47 +135,33 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
           .replace(/\s+/g, ' ')
           .trim()
         if (text) {
-          allParagraphsList.push({ start: paraStart, end, text })
+          paragraphs.push({ start: paraStart, end, text })
         }
         if (!isEndOfBlocks) paraStart = i
       }
     }
 
-    // Step 3: Find nearest paragraph using X+Y euclidean distance (X weight 2x for two-column layout)
-    let nearestParaIdx = 0
+    // Step 3: Find nearest paragraph using X+Y euclidean distance (X weight 2x)
+    let nearestIdx = 0
     let minDist = Infinity
-    
-    for (let pi = 0; pi < allParagraphsList.length; pi++) {
-      const para = allParagraphsList[pi]
-      // Use center block of paragraph for distance calculation
+    for (let pi = 0; pi < paragraphs.length; pi++) {
+      const para = paragraphs[pi]
       const centerBlock = pageBlocks[Math.floor((para.start + para.end) / 2)]
       const dx = (centerBlock.xRatio || 0.5) - longPressX
       const dy = (centerBlock.yRatio || 0.5) - longPressY
-      // X is more important for two-column layout (weight 2x)
       const dist = Math.sqrt(dx * dx * 4 + dy * dy)
       if (dist < minDist) {
         minDist = dist
-        nearestParaIdx = pi
+        nearestIdx = pi
       }
     }
 
-    // Step 4: Build display text: N-1, N, N+1 paragraphs
-    const prevPara = allParagraphsList[nearestParaIdx - 1]
-    const currPara = allParagraphsList[nearestParaIdx]
-    const nextPara = allParagraphsList[nearestParaIdx + 1]
-    
-    const displayParts: string[] = []
-    if (prevPara) displayParts.push(prevPara.text)
-    if (currPara) displayParts.push(currPara.text)
-    if (nextPara) displayParts.push(nextPara.text)
+    setAllParagraphsList(paragraphs)
+    setNearestParaIdx(nearestIdx)
+    // Default selected paragraph = nearest paragraph (for Layer 2)
+    setSelectedParagraphIdx(nearestIdx)
 
-    const displayText = displayParts.join('\n\n')
-    setNearestParagraph(displayText || '未找到段落文本')
-    setNearestParagraphIdx(nearestParaIdx)
-    setAllParagraphs(allParagraphsList.map(p => p.text))
-
-    console.log('[PDF Preview] Nearest para:', nearestParaIdx, '/', allParagraphsList.length, 'dist:', minDist.toFixed(3), 'x:', longPressX.toFixed(2), 'y:', longPressY.toFixed(2))
-    console.log('[PDF Preview] Display 3 paras:', displayParts.map(t => t.substring(0, 30) + '...'))
+    console.log('[PDF Preview] Nearest para:', nearestIdx, '/', paragraphs.length, 'dist:', minDist.toFixed(3))
   }, [showTextModal, textBlocks, currentPage, longPressY, longPressX])
 
   // Touch gesture state
@@ -546,11 +533,32 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Header */}
+              {/* Header — Layer 1: 段落摘要列表 */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
-                <span style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>
-                  第 {currentPage + 1} 页 · 长按选择文字复制
-                </span>
+                {selectedParagraphIdx < 0 ? (
+                  <span style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>
+                    第 {currentPage + 1} 页 · 选择文字复制
+                  </span>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button
+                      onClick={() => setSelectedParagraphIdx(-1)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: 14,
+                        color: '#3b82f6',
+                        padding: '4px 8px',
+                      }}
+                    >
+                      ← 返回
+                    </button>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>
+                      第 {selectedParagraphIdx + 1} 段全文
+                    </span>
+                  </div>
+                )}
                 <button
                   onClick={() => setShowTextModal(false)}
                   style={{
@@ -567,16 +575,91 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
                 </button>
               </div>
 
-              {/* Textarea - shows N-1, N, N+1 paragraphs for copy */}
-              <div style={{ flex: showFullParagraphList ? '0 0 40%' : 1, overflow: 'hidden', padding: '12px 16px', transition: 'flex 0.2s' }}>
-                {!nearestParagraph ? (
-                  <div style={{ textAlign: 'center', color: '#9ca3af', padding: '40px 0', fontSize: 13 }}>
-                    长按 PDF 页面某处选择文字复制
-                  </div>
-                ) : (
+              {/* Layer 1: 段落摘要列表 — 点击任意段落进入 Layer 2 */}
+              {selectedParagraphIdx < 0 && (
+                <div style={{ flex: 1, overflow: 'hidden', padding: '0 16px', display: 'flex', flexDirection: 'column' }}>
+                  {allParagraphsList.length === 0 ? (
+                    <div style={{ textAlign: 'center', color: '#9ca3af', padding: '40px 0', fontSize: 13 }}>
+                      长按 PDF 页面某处选择文字复制
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ fontSize: 12, color: '#9ca3af', padding: '8px 0', flexShrink: 0 }}>
+                        共 {allParagraphsList.length} 段，点击展开全文复制
+                        {nearestParaIdx >= 0 && <span style={{ color: '#3b82f6' }}> · 目标: 第{nearestParaIdx + 1}段</span>}
+                      </div>
+                      <div
+                        style={{ flex: 1, overflowY: 'auto' }}
+                        ref={(el) => {
+                          // Auto-scroll to nearest paragraph when list appears
+                          if (el && nearestParaIdx >= 0) {
+                            const items = el.querySelectorAll('[data-para-idx]')
+                            const target = items[nearestParaIdx] as HTMLElement
+                            if (target) {
+                              const containerH = el.clientHeight
+                              const itemTop = target.offsetTop
+                              el.scrollTop = Math.max(0, itemTop - containerH / 2 + 40)
+                            }
+                          }
+                        }}
+                      >
+                        {allParagraphsList.map((para, idx) => {
+                          const isHighlight = idx === nearestParaIdx
+                          const preview = para.text.length > 40 ? para.text.substring(0, 40) + '...' : para.text
+                          return (
+                            <div
+                              key={idx}
+                              data-para-idx={idx}
+                              onClick={() => setSelectedParagraphIdx(idx)}
+                              style={{
+                                marginBottom: 8,
+                                borderRadius: 6,
+                                border: isHighlight ? '1px solid #3b82f6' : '1px solid #e5e7eb',
+                                background: isHighlight ? '#eff6ff' : '#f9fafb',
+                                cursor: 'pointer',
+                                overflow: 'hidden',
+                              }}
+                            >
+                              <div style={{ padding: '10px 12px' }}>
+                                <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 4 }}>
+                                  {idx + 1}.
+                                </div>
+                                <div style={{
+                                  fontSize: 12,
+                                  color: '#374151',
+                                  lineHeight: 1.6,
+                                  maxHeight: 54,
+                                  overflow: 'hidden',
+                                }}>
+                                  {preview}
+                                </div>
+                              </div>
+                              {isHighlight && (
+                                <div style={{
+                                  padding: '4px 12px',
+                                  background: '#dbeafe',
+                                  fontSize: 10,
+                                  color: '#2563eb',
+                                  textAlign: 'center',
+                                }}>
+                                  ← 目标段落（点击展开复制）
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Layer 2: 段落全文 textarea — selectedParagraphIdx >= 0 时显示 */}
+              {selectedParagraphIdx >= 0 && allParagraphsList[selectedParagraphIdx] && (
+                <div style={{ flex: 1, overflow: 'hidden', padding: '12px 16px' }}>
                   <textarea
                     readOnly
-                    value={nearestParagraph}
+                    value={allParagraphsList[selectedParagraphIdx].text}
                     style={{
                       width: '100%',
                       height: '100%',
@@ -593,73 +676,8 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
                       WebkitUserSelect: 'text',
                     }}
                   />
-                )}
-              </div>
-
-              {/* Full paragraph list - collapsible */}
-              {showFullParagraphList && (
-                <div style={{ flex: 1, overflow: 'hidden', padding: '0 16px 12px', display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: '#6b7280', marginBottom: 8, flexShrink: 0 }}>
-                    全页段落 ({allParagraphs.length}段)
-                  </div>
-                  <div style={{ flex: 1, overflowY: 'auto' }}>
-                    {allParagraphs.map((para, idx) => {
-                      const isHighlight = idx === nearestParagraphIdx
-                      const preview = para.length > 50 ? para.substring(0, 50) + '...' : para
-                      return (
-                        <div key={idx} style={{
-                          marginBottom: 8,
-                          borderRadius: 6,
-                          border: isHighlight ? '1px solid #3b82f6' : '1px solid #e5e7eb',
-                          background: isHighlight ? '#eff6ff' : '#f9fafb',
-                          overflow: 'hidden',
-                        }}>
-                          <div style={{
-                            padding: '8px 10px',
-                            fontSize: 12,
-                            color: '#374151',
-                            lineHeight: 1.5,
-                            maxHeight: 60,
-                            overflow: 'hidden',
-                          }}>
-                            {preview}
-                          </div>
-                          {isHighlight && (
-                            <div style={{
-                              padding: '4px 10px',
-                              background: '#dbeafe',
-                              fontSize: 11,
-                              color: '#2563eb',
-                              textAlign: 'center',
-                            }}>
-                              ← 目标段落 ({idx + 1})
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
                 </div>
               )}
-
-              {/* Toggle full paragraph list */}
-              <div style={{ padding: '0 16px 12px', flexShrink: 0 }}>
-                <button
-                  onClick={() => setShowFullParagraphList(!showFullParagraphList)}
-                  style={{
-                    width: '100%',
-                    background: showFullParagraphList ? '#f3f4f6' : '#eff6ff',
-                    border: showFullParagraphList ? '1px solid #d1d5db' : '1px solid #bfdbfe',
-                    borderRadius: 6,
-                    padding: '8px 16px',
-                    fontSize: 13,
-                    color: showFullParagraphList ? '#6b7280' : '#2563eb',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {showFullParagraphList ? '▲ 收起段落列表' : `▼ 查看全文段落 (${allParagraphs.length}段)`}
-                </button>
-              </div>
             </div>
           </div>
         )}

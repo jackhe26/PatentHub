@@ -269,15 +269,15 @@ export default class MobilePlatform extends IndexedDBStorage implements Platform
           }
         }
 
-        // 按 Y 坐标排序（从上到下），并计算归一化 yRatio（0=页面顶部，1=页面底部）
+        // 按原始 Y 坐标从大到小排序（大 Y = PDF 顶部 = 阅读顺序第一），然后归一化
         if (pageBlocks.length > 0) {
-          pageBlocks.sort((a, b) => a.yRatio - b.yRatio)
-          const maxY = Math.max(...pageBlocks.map(b => b.yRatio))
-          const minY = Math.min(...pageBlocks.map(b => b.yRatio))
+          pageBlocks.sort((a, b) => b.yPdf - a.yPdf)  // 大 Y 在前（小 Y 在后）= 从上到下阅读顺序
+          const maxY = pageBlocks[0].yPdf
+          const minY = pageBlocks[pageBlocks.length - 1].yPdf
           const range = maxY - minY || 1
           for (const block of pageBlocks) {
-            // PDF 原点在左下角，转换为屏幕坐标（0=顶部，1=底部）
-            block.yRatio = 1 - ((block.yRatio - minY) / range)
+            // PDF 原点在左下角，Y 越大越靠上，转换为屏幕坐标后 0=顶部，1=底部
+            block.yRatio = 1 - ((block.yPdf - minY) / range)
           }
         }
         textBlocks.push(pageBlocks)
