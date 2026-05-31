@@ -2,7 +2,7 @@
 
 ## 概述
 
-为 Android 端 App 实现 PDF 文件上传、解析、渲染预览、手势交互的完整功能。整个开发过程分为 4 个阶段，覆盖了从"完全无法使用"到"流畅完整"的全部过程。
+为 Android 端 App 实现 PDF 文件上传、解析、渲染预览、手势交互的完整功能。整个开发过程分为 5 个阶段，覆盖了从"完全无法使用"到"流畅完整"的全部过程。
 
 ---
 
@@ -17,8 +17,8 @@ preprocessFile() (sessionHelpers.ts)
 │  移动端 PDF 解析（pdfjs-dist 静态资源注入）       │
 │  → 文本内容 → storage.setBlob(uniqKey)          │
 │                                               │
-│  移动端 PDF 原始数据存储（Filesystem）           │
-│  → 原始 bytes → storage.setBlob(uniqKey_pdf_raw)│
+│  移动端 PDF 原始数据存储（FileReader + IndexedDB）│
+│  → 原始 bytes (base64) → storage.setBlob(uniqKey_pdf_raw)
 └─────────────────────────────────────────────────┘
         ↓
 PDFPreviewPanel ($sessionId.tsx)
@@ -175,7 +175,7 @@ PdfRendererPlugin.java (Android Native)
 
 **根本原因**：`MainActivity.java` 是空的，没有注册插件。Capacitor 自定义插件必须手动注册。
 
-**修复**：`android/app/src/main/java/com/patent/hub/MainActivity.java`
+**修复**：`android/app/src/main/java/.../MainActivity.java`
 
 ```java
 public class MainActivity extends BridgeActivity {
@@ -320,6 +320,109 @@ const newTransY = pinchOriginY.current - (pinchOriginY.current - startTransY.cur
 
 ---
 
+## 第五阶段：PDF 预览数据丢失 Bug（2026-05-31）
+
+### 问题现象
+
+上传 PDF 后点击预览控件，报错 `PDF preview data not found. Please re-upload the PDF file.`。1MB 左右的小 PDF 也同样失败。
+
+### 根本原因：Filesystem getUri 返回 content:// URI
+
+当时的方案是：
+1. `sessionHelpers.ts` 用 `Filesystem.writeFile()` 把 PDF 写入 App 私有目录
+2. IndexedDB 里存 `"filesystem:pdf_cache/xxx.pdf"` 路径
+3. `$sessionId.tsx` 用 `Filesystem.getUri()` 获取 URI
+4. 调用 `pdfRenderer.open(uri)` 打开
+
+**问题出在第 4 步**：`Filesystem.getUri()` 在 Android 上返回的是 `content://com.android.externalstorage.documents/...` 格式的 Content URI，而 `PdfRendererPlugin.java` 里的实现是：
+
+```java
+// PdfRendererPlugin.java
+ParcelFileDescriptor pfd = ParcelFileDescriptor.open(new File(uri), ParcelFileDescriptor.MODE_READ_ONLY);
+```
+
+`File` 类只支持 `file://` 格式，不支持 `content://`，导致 `new File(content://...)` 抛出异常，`_pdf_raw` 根本没有被存储。
+
+**数据流失败路径**：
+```
+preprocessFile() 开始
+    ↓
+Filesystem.writeFile() 成功 → 存 "filesystem:pdf_cache/xxx.pdf" 到 IndexedDB
+    ↓
+parsePdfWithPdfJs() 成功 → 文本内容存到 uniqKey
+    ↓
+session 更新 → PDFPreviewPanel 挂载
+    ↓
+读取 _pdf_raw → 得到 "filesystem:pdf_cache/xxx.pdf"
+    ↓
+Filesystem.getUri() → 返回 "content://..."
+    ↓
+pdfRenderer.open("content://...") → ❌ File 类不认识 content:// → 报错
+    ↓
+catch 块 → setError('Failed to load PDF...')
+```
+
+### 解决：放弃 Filesystem，改用 FileReader.readAsDataURL()
+
+不再用 `Filesystem.writeFile()` 写文件，改用浏览器原生 `FileReader.readAsDataURL()` 直接转 base64 存 IndexedDB。读取时直接用 `pdfRenderer.openWithBase64(base64)`。
+
+**修复文件 1**：`sessionHelpers.ts`
+
+```typescript
+// 替换前（有问题）
+try {
+  const { Filesystem, Directory } = await import('@capacitor/filesystem')
+  // ... Filesystem.writeFile() ...
+  await storage.setBlob(`${uniqKey}_pdf_raw`, `filesystem:${cacheFileName}`)
+} catch (rawErr) { ... }
+
+// 替换后（稳健）
+try {
+  const rawBase64 = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      resolve(result.split(',')[1])  // 去掉 data:...;base64, 前缀
+    }
+    reader.onerror = () => reject(new Error('FileReader failed'))
+    reader.readAsDataURL(file)
+  })
+  await storage.setBlob(`${uniqKey}_pdf_raw`, rawBase64)
+  log.debug('Stored PDF raw bytes to IndexedDB, size:', rawBase64.length)
+} catch (rawErr) {
+  log.error('Failed to store PDF raw bytes:', rawErr)
+}
+```
+
+**修复文件 2**：`$sessionId.tsx`
+
+```typescript
+// 替换前（有问题）
+if (rawRef.startsWith('filesystem:')) {
+  const uriResult = await Filesystem.getUri({ path: filePath, directory: Directory.Data })
+  const openResult = await pdfRenderer.open(uriResult.uri)  // ← 失败点
+  // ...
+} else {
+  // legacy base64 分支
+}
+
+// 替换后（稳健）
+let cleanBase64 = rawRef.includes(',') ? rawRef.split(',')[1] : rawRef
+cleanBase64 = cleanBase64.replace(/\s/g, '')
+const openResult = await pdfRenderer.openWithBase64(cleanBase64)  // ← 直接传 base64
+```
+
+### 持久性说明
+
+IndexedDB 数据存在 App 的私有目录里，**不会被系统自动清理**。只有以下情况会丢失：
+- 用户手动清除 App 数据
+- 卸载 App
+- 系统存储空间极度不足时 Android 强制清理
+
+正常使用下，PDF 数据是**永久保存**的。重开 App、关机再开都不会丢失。
+
+---
+
 ## 最终修改文件清单
 
 | 文件 | 修改内容 | 所属阶段 |
@@ -329,9 +432,9 @@ const newTransY = pinchOriginY.current - (pinchOriginY.current - startTransY.cur
 | `src/renderer/public/pdfjs/pdf-bridge.mjs` | **新增** — 桥接脚本 | 第二阶段 |
 | `src/renderer/public/pdfjs/pdf.min.mjs` | **新增** — pdf.js 核心库 | 第二阶段 |
 | `src/renderer/public/pdfjs/pdf.worker.min.mjs` | **新增** — pdf.js Worker | 第二阶段 |
-| `src/renderer/stores/sessionHelpers.ts` | 存 `_pdf_raw`（Filesystem）+ `_pdf_pages` 文本 + 持久化存储 | 第三/四阶段 |
+| `src/renderer/stores/sessionHelpers.ts` | 存 `_pdf_raw`（FileReader）+ `_pdf_pages` 文本 | 第三/四/五阶段 |
 | `src/renderer/storage/StoreStorage.ts` | 添加 `linkUniqKey()` 方法 | 第四阶段 |
-| `src/renderer/routes/session/$sessionId.tsx` | Filesystem 读取 + 手势逻辑 + UI 浮层页码 | 第三/四阶段 |
+| `src/renderer/routes/session/$sessionId.tsx` | 手势逻辑 + UI 浮层页码 + openWithBase64 | 第三/四/五阶段 |
 | `android/app/src/main/java/.../MainActivity.java` | 注册 PdfRendererPlugin | 第三阶段 |
 | `android/app/src/main/java/.../PdfRendererPlugin.java` | `bitmap.eraseColor(Color.WHITE)` | 第三阶段 |
 | `.github/workflows/release-android.yml` | **新增** — Android 构建 & 发布 | 第二阶段 |
@@ -353,7 +456,7 @@ atob(clean.replace(/\s/g, ''))
 
 ### 3. 存储时区分"解析内容"和"原始数据"
 - `storageKey` → 文本内容（给 AI）
-- `storageKey_pdf_raw` → 原始 PDF bytes（给预览）
+- `storageKey_pdf_raw` → 原始 PDF base64 bytes（给预览）
 - `storageKey_pdf_pages` → 每页文本（给复制弹窗）
 
 ### 4. Android PdfRenderer 渲染到 JPEG 必须填充白色背景
@@ -366,12 +469,18 @@ bitmap.eraseColor(android.graphics.Color.WHITE)  // 必须在 render() 之前
 registerPlugin(YourPlugin.class);  // 必须在 super.onCreate() 之前
 ```
 
-### 6. PDF 持久化存储（Filesystem 方案）
-- PDF 原始数据存在 IndexedDB 里，容易被 Android 系统清理掉
-- 解决方案：使用 Capacitor Filesystem 将 PDF 写入 App 私有目录，IndexedDB 只存路径引用
-- 好处：PDF 数据持久化，二次打开不再丢失
+### 6. File API URI 格式与 File 类的兼容性
+- `Filesystem.getUri()` 在 Android 上返回 `content://` 格式 URI
+- `File` 类（Java）只支持 `file://` 格式，不支持 `content://`
+- `ParcelFileDescriptor.open(new File(content://...), ...)` 会直接失败
+- **解决方案**：不用 Filesystem，直接用 `FileReader.readAsDataURL()` + `pdfRenderer.openWithBase64()`
 
-### 7. 平台隔离原则
+### 7. IndexedDB 持久性
+- IndexedDB 数据存在 App 私有目录，正常情况下永久保存
+- 不会被系统自动清理，只有用户手动清除或卸载才会丢失
+- 足以替代 Filesystem 方案，且更简单可靠
+
+### 8. 平台隔离原则
 所有移动端特有逻辑都用 `platform.type === 'mobile'` 或 `if (!isMobile) return` 隔离，确保桌面端不受影响。
 
 ---
@@ -381,11 +490,11 @@ registerPlugin(YourPlugin.class);  // 必须在 super.onCreate() 之前
 1. **旧会话兼容性**：Bug 3 修复后，之前上传的 PDF 没有 `_pdf_raw`，需要重新上传才能看到预览
 2. **`touchAction: 'none'` 是必须的**，否则 Android WebView 会拦截双指手势
 3. 滑动翻页和双指缩放互斥：双指操作时不触发翻页，单指滑动时也不触发缩放
-4. 旧会话（纯 base64 格式）仍走旧逻辑，不受影响，下次重新上传时自动使用 Filesystem 格式
+4. Bug 5 修复后，之前用 Filesystem 格式存的 PDF（`filesystem:pdf_cache/xxx.pdf`）读取会失败，需要重新上传
 
 ---
 
 **开发日期**：2026-05-24 ~ 2026-05-31  
-**涉及文件**：12 个  
-**修复 Bug 数**：4 个  
+**涉及文件**：13 个  
+**修复 Bug 数**：5 个  
 **最终状态**：✅ PDF 上传 → 解析 → 渲染 → 手势交互 → 文本复制 完整可用
