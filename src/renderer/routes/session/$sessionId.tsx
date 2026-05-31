@@ -80,9 +80,33 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
 
   // Feature 3: Per-page text for copy modal (paragraph-based)
   const [pageTexts, setPageTexts] = useState<string[]>([])
+  const [textBlocks, setTextBlocks] = useState<any[][]>([])  // Text blocks with Y coordinates
   const [showTextModal, setShowTextModal] = useState(false)
   const [expandedParagraph, setExpandedParagraph] = useState<number | null>(null)
   const [copiedFeedback, setCopiedFeedback] = useState<number | null>(null)
+  const [longPressY, setLongPressY] = useState<number>(0.5)  // Y ratio for paragraph location (0=top, 1=bottom)
+
+  // Auto-expand paragraph based on long-press Y coordinate
+  useEffect(() => {
+    if (!showTextModal || textBlocks.length === 0) return
+
+    const pageBlocks = textBlocks[currentPage]
+    if (!pageBlocks || pageBlocks.length === 0) return
+
+    // Find the paragraph index closest to the long-press Y coordinate
+    let nearestIdx = 0
+    let minDiff = Infinity
+    pageBlocks.forEach((block: any, idx: number) => {
+      const diff = Math.abs((block.yRatio || 0.5) - longPressY)
+      if (diff < minDiff) {
+        minDiff = diff
+        nearestIdx = idx
+      }
+    })
+
+    setExpandedParagraph(nearestIdx)
+    console.log('[PDF Preview] Auto-expand paragraph:', nearestIdx, 'yRatio:', pageBlocks[nearestIdx]?.yRatio, 'longPressY:', longPressY)
+  }, [showTextModal, textBlocks, currentPage, longPressY])
 
   // Touch gesture state
   const touchStartX = useRef<number>(0)
@@ -208,7 +232,7 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
         const pageResult = await pdfRenderer.renderPage(0, 2.0)
         setPageImage(pageResult.base64)
 
-        // Feature 3: Load per-page text for copy modal
+        // Feature 3: Load per-page text and text blocks with Y coordinates
         try {
           const pagesJson = await storage.getBlob(`${storageKey}_pdf_pages`)
           if (pagesJson) {
@@ -218,6 +242,18 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
           }
         } catch (textErr) {
           console.warn('[PDF Preview] Failed to load page texts:', textErr)
+        }
+
+        // Load text blocks with Y coordinates for paragraph location
+        try {
+          const blocksJson = await storage.getBlob(`${storageKey}_pdf_blocks`)
+          if (blocksJson) {
+            const blocks = JSON.parse(blocksJson) as any[][]
+            setTextBlocks(blocks)
+            console.log('[PDF Preview] Loaded text blocks with Y coordinates:', blocks.length, 'pages')
+          }
+        } catch (blocksErr) {
+          console.warn('[PDF Preview] Failed to load text blocks:', blocksErr)
         }
 
         setLoading(false)
@@ -267,6 +303,11 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
           onTouchStart={(e) => {
             // Feature 3: Start long-press timer for text modal
             if (e.touches.length === 1 && pageTexts.length > 0) {
+              // Capture Y coordinate ratio (0=top, 1=bottom) for paragraph location
+              const containerHeight = (e.currentTarget as HTMLElement).clientHeight
+              const yRatio = e.touches[0].clientY / containerHeight
+              setLongPressY(yRatio)
+
               longPressTimer.current = setTimeout(() => {
                 setShowTextModal(true)
               }, 600)

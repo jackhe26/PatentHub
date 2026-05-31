@@ -175,7 +175,7 @@ export default class MobilePlatform extends IndexedDBStorage implements Platform
    * @param file PDF 文件对象
    * @returns 解析结果
    */
-  async parsePdfWithPdfJs(file: File): Promise<{ content: string; error?: string; textParts?: string[] }> {
+  async parsePdfWithPdfJs(file: File): Promise<{ content: string; error?: string; textParts?: string[]; textBlocks?: any[][] }> {
     console.log('[MobilePlatform] Starting PDF parsing, file:', file.name, 'size:', file.size)
     
     try {
@@ -237,13 +237,40 @@ export default class MobilePlatform extends IndexedDBStorage implements Platform
         return { content: '', error: `PDF文件格式错误: ${pdfLoadError instanceof Error ? pdfLoadError.message : '无法加载PDF文件'}` }
       }
 
-      // 提取每一页的文本
+      // 提取每一页的文本和带坐标的文本块
       const textParts: string[] = []
+      const textBlocks: any[][] = []  // 每页的带坐标文本块
 
       for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
         console.log('[MobilePlatform] Processing page:', pageNum)
         const page = await pdf.getPage(pageNum)
         const textContent = await page.getTextContent()
+
+        // 提取带坐标的文本块（用于长按时定位段落）
+        const pageBlocks: any[] = []
+        for (const item of textContent.items) {
+          if (item.str && item.str.trim()) {
+            // transform[5] 是 Y 坐标（PDF 原点在左下角）
+            const yPdf = item.transform ? item.transform[5] : 0
+            pageBlocks.push({
+              text: item.str,
+              yRatio: yPdf  // 归一化 Y 坐标，0=顶部，1=底部（后续会计算）
+            })
+          }
+        }
+
+        // 按 Y 坐标排序（从上到下），并计算归一化 yRatio（0=页面顶部，1=页面底部）
+        if (pageBlocks.length > 0) {
+          pageBlocks.sort((a, b) => a.yRatio - b.yRatio)
+          const maxY = Math.max(...pageBlocks.map(b => b.yRatio))
+          const minY = Math.min(...pageBlocks.map(b => b.yRatio))
+          const range = maxY - minY || 1
+          for (const block of pageBlocks) {
+            // PDF 原点在左下角，转换为屏幕坐标（0=顶部，1=底部）
+            block.yRatio = 1 - ((block.yRatio - minY) / range)
+          }
+        }
+        textBlocks.push(pageBlocks)
 
         // 合并文本项
         const pageText = textContent.items
@@ -265,7 +292,8 @@ export default class MobilePlatform extends IndexedDBStorage implements Platform
       }
 
       // Return both fullText and textParts array (per-page text for copy feature)
-      return { content: fullText, textParts }
+      // Also return textBlocks for Y-coordinate based paragraph location
+      return { content: fullText, textParts, textBlocks }
     } catch (error) {
       console.error('[MobilePlatform] PDF parsing error:', error)
       const errorMessage = error instanceof Error ? error.message : '未知错误'

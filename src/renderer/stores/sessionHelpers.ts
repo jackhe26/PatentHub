@@ -298,7 +298,7 @@ export async function preprocessFile(
                 log.error('Failed to store PDF raw bytes:', rawErr)
               }
 
-              const parseResult = (await platform.parsePdfWithPdfJs(file)) as { content: string; error?: string; textParts?: string[] }
+              const parseResult = (await platform.parsePdfWithPdfJs(file)) as { content: string; error?: string; textParts?: string[]; textBlocks?: any[][] }
               if (parseResult.error) {
                 throw new Error(parseResult.error)
               }
@@ -314,6 +314,12 @@ export async function preprocessFile(
               // Store per-page text for copy feature (Feature 3: Long-press text modal)
               if (parseResult.textParts && parseResult.textParts.length > 0) {
                 await storage.setBlob(`${uniqKey}_pdf_pages`, JSON.stringify(parseResult.textParts))
+              }
+
+              // Store text blocks with Y coordinates for paragraph location
+              if (parseResult.textBlocks && parseResult.textBlocks.length > 0) {
+                await storage.setBlob(`${uniqKey}_pdf_blocks`, JSON.stringify(parseResult.textBlocks))
+                log.debug('Stored PDF text blocks with Y coordinates, pages:', parseResult.textBlocks.length)
               }
 
               result = { content: parseResult.content, storageKey: uniqKey, tokenCountMap }
