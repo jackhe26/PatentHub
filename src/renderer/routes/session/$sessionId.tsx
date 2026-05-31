@@ -364,8 +364,11 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
               // Capture X and Y coordinate ratios for paragraph location
               const containerHeight = (e.currentTarget as HTMLElement).clientHeight
               const containerWidth = (e.currentTarget as HTMLElement).clientWidth
-              const yRatio = e.touches[0].clientY / containerHeight
-              const xRatio = e.touches[0].clientX / containerWidth
+              // Reverse the scale + translate transforms to map screen touch → image content coordinates
+              const rawY = e.touches[0].clientY - translateY
+              const rawX = e.touches[0].clientX - translateX
+              const yRatio = (rawY / scale) / containerHeight
+              const xRatio = (rawX / scale) / containerWidth
               setLongPressY(yRatio)
               setLongPressX(xRatio)
 
