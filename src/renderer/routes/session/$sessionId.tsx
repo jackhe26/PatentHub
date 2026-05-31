@@ -78,34 +78,85 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
   const [currentPage, setCurrentPage] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
 
-  // Feature 3: Per-page text for copy modal (paragraph-based)
-  const [pageTexts, setPageTexts] = useState<string[][]>([])  // Per-page paragraph arrays
-  const [textBlocks, setTextBlocks] = useState<any[][]>([])  // Text blocks with Y coordinates
+  // Feature 3: Per-page full text for textarea + auto-select paragraph
+  const [pageTexts, setPageTexts] = useState<string[]>([])  // Per-page full text (for textarea display)
+  const [textBlocks, setTextBlocks] = useState<any[][]>([])  // Text blocks with Y coordinates, charOffset, hasEOL
   const [showTextModal, setShowTextModal] = useState(false)
-  const [expandedParagraph, setExpandedParagraph] = useState<number | null>(null)
-  const [copiedFeedback, setCopiedFeedback] = useState<number | null>(null)
   const [longPressY, setLongPressY] = useState<number>(0.5)  // Y ratio for paragraph location (0=top, 1=bottom)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)  // Ref for setSelectionRange
 
-  // Auto-expand paragraph based on long-press Y coordinate
+  // Auto-select paragraph nearest to longPressY when modal opens
   useEffect(() => {
-    if (!showTextModal || textBlocks.length === 0) return
+    if (!showTextModal || textBlocks.length === 0 || !textareaRef.current) return
 
     const pageBlocks = textBlocks[currentPage]
     if (!pageBlocks || pageBlocks.length === 0) return
 
-    // Find the paragraph index closest to the long-press Y coordinate
-    let nearestIdx = 0
+    // Step 1: Find nearest text block by Y coordinate
+    let nearestBlockIdx = 0
     let minDiff = Infinity
     pageBlocks.forEach((block: any, idx: number) => {
       const diff = Math.abs((block.yRatio || 0.5) - longPressY)
       if (diff < minDiff) {
         minDiff = diff
-        nearestIdx = idx
+        nearestBlockIdx = idx
       }
     })
 
-    setExpandedParagraph(nearestIdx)
-    console.log('[PDF Preview] Auto-expand paragraph:', nearestIdx, 'yRatio:', pageBlocks[nearestIdx]?.yRatio, 'longPressY:', longPressY)
+    // Step 2: Calculate dynamic line height (for paragraph gap threshold)
+    const lineHeights: number[] = []
+    for (let i = 1; i < pageBlocks.length; i++) {
+      const dy = Math.abs(pageBlocks[i].yRatio - pageBlocks[i - 1].yRatio)
+      if (dy > 0 && dy < 0.1) lineHeights.push(dy)
+    }
+    const avgLineHeight = lineHeights.length > 0 
+      ? lineHeights.sort((a, b) => a - b)[Math.floor(lineHeights.length / 2)] 
+      : 0.05
+    const paragraphGap = avgLineHeight * 1.5
+
+    // Step 3: Find paragraph boundaries (start and end block indices)
+    let startIdx = nearestBlockIdx
+    let endIdx = nearestBlockIdx
+
+    // Expand backward to find paragraph start
+    while (startIdx > 0) {
+      const prevY = pageBlocks[startIdx - 1].yRatio || 0
+      const currY = pageBlocks[startIdx].yRatio || 0
+      if (Math.abs(currY - prevY) > paragraphGap * 0.5) {
+        break
+      }
+      startIdx--
+    }
+
+    // Expand forward to find paragraph end
+    while (endIdx < pageBlocks.length - 1) {
+      const currY = pageBlocks[endIdx].yRatio || 0
+      const nextY = pageBlocks[endIdx + 1].yRatio || 0
+      const isEOL = pageBlocks[endIdx].hasEOL || false
+      const yGap = Math.abs(nextY - currY)
+      // Paragraph ends when: Y gap > paragraphGap OR hasEOL AND next block is far enough
+      if (yGap > paragraphGap || (isEOL && yGap > paragraphGap * 0.8)) {
+        break
+      }
+      endIdx++
+    }
+
+    // Step 4: Calculate char positions from block charOffset
+    const startChar = pageBlocks[startIdx].charOffset || 0
+    const endBlock = pageBlocks[endIdx]
+    const endChar = (endBlock.charOffset || 0) + (endBlock.text?.length || 0)
+
+    // Step 5: Set selection range and scroll to position
+    const textarea = textareaRef.current
+    textarea.focus()
+    textarea.setSelectionRange(startChar, endChar)
+    
+    // Scroll to make selection visible
+    const lineHeight = 24  // approximate line height in px
+    const lines = textarea.value.substring(0, startChar).split('\n').length
+    textarea.scrollTop = Math.max(0, (lines - 3) * lineHeight)
+
+    console.log('[PDF Preview] Selected paragraph:', startIdx, '-', endIdx, 'chars:', startChar, '-', endChar, 'yRatio:', pageBlocks[nearestBlockIdx].yRatio)
   }, [showTextModal, textBlocks, currentPage, longPressY])
 
   // Touch gesture state
@@ -236,7 +287,7 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
         try {
           const pagesJson = await storage.getBlob(`${storageKey}_pdf_pages`)
           if (pagesJson) {
-            const pages = JSON.parse(pagesJson) as string[][]
+            const pages = JSON.parse(pagesJson) as string[]
             setPageTexts(pages)
             console.log('[PDF Preview] Loaded page texts:', pages.length, 'pages')
           }
@@ -444,7 +495,7 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
           )}
         </div>
 
-        {/* Feature 3: Paragraph-based text copy modal */}
+        {/* Feature 3: Textarea with auto-selected paragraph for native Android text selection */}
         {showTextModal && (
           <div
             style={{
@@ -459,13 +510,13 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
               justifyContent: 'center',
               zIndex: 1000,
             }}
-            onClick={() => { setShowTextModal(false); setExpandedParagraph(null) }}
+            onClick={() => setShowTextModal(false)}
           >
             <div
               style={{
                 background: '#fff',
                 borderRadius: 12,
-                width: '80%',
+                width: '85%',
                 height: '80%',
                 display: 'flex',
                 flexDirection: 'column',
@@ -477,10 +528,10 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
               {/* Header */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
                 <span style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>
-                  第 {currentPage + 1} 页文本 ({pageTexts[currentPage] ? pageTexts[currentPage].length : 0} 段)
+                  第 {currentPage + 1} 页 · 长按选择文字复制
                 </span>
                 <button
-                  onClick={() => { setShowTextModal(false); setExpandedParagraph(null) }}
+                  onClick={() => setShowTextModal(false)}
                   style={{
                     background: '#f3f4f6',
                     border: 'none',
@@ -495,73 +546,34 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
                 </button>
               </div>
 
-              {/* Paragraph list */}
-              <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
-                {!pageTexts[currentPage] || pageTexts[currentPage].length === 0 ? (
+              {/* Textarea - native text selection, auto-selects nearest paragraph */}
+              <div style={{ flex: 1, overflow: 'hidden', padding: '12px 16px' }}>
+                {!pageTexts[currentPage] ? (
                   <div style={{ textAlign: 'center', color: '#9ca3af', padding: '40px 0', fontSize: 13 }}>
                     本页无文本内容
                   </div>
                 ) : (
-                  pageTexts[currentPage].map((paragraph: string, idx: number) => {
-                    const isExpanded = expandedParagraph === idx
-                    const preview = paragraph.length > 30 ? paragraph.substring(0, 30) + '...' : paragraph
-                    return (
-                      <div key={idx} style={{ marginBottom: 10, borderRadius: 8, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
-                        {/* Paragraph header - click to expand */}
-                        <div
-                          onClick={() => setExpandedParagraph(isExpanded ? null : idx)}
-                          style={{
-                            padding: '10px 12px',
-                            background: isExpanded ? '#f0f9ff' : '#f9fafb',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                          }}
-                        >
-                          <span style={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>
-                            ▶ {idx + 1}. {preview}
-                          </span>
-                          <span style={{ fontSize: 11, color: '#9ca3af' }}>
-                            {paragraph.length}字
-                          </span>
-                        </div>
-
-                        {/* Expanded content */}
-                        {isExpanded && (
-                          <div style={{ padding: '12px', background: '#fff' }}>
-                            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.6, marginBottom: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                              {paragraph}
-                            </div>
-                            <button
-                              onClick={async (e) => {
-                                e.stopPropagation()
-                                try {
-                                  await navigator.clipboard.writeText(paragraph)
-                                  setCopiedFeedback(idx)
-                                  setTimeout(() => setCopiedFeedback(null), 1500)
-                                } catch {}
-                              }}
-                              style={{
-                                background: copiedFeedback === idx ? '#22c55e' : '#3b82f6',
-                                color: '#fff',
-                                border: 'none',
-                                borderRadius: 6,
-                                padding: '8px 16px',
-                                fontSize: 13,
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 4,
-                              }}
-                            >
-                              {copiedFeedback === idx ? '✓ 已复制' : '一键复制'}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })
+                  <textarea
+                    ref={textareaRef}
+                    readOnly
+                    value={pageTexts[currentPage] || ''}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: 8,
+                      padding: '12px',
+                      fontSize: 14,
+                      lineHeight: 1.8,
+                      color: '#374151',
+                      background: '#fafafa',
+                      resize: 'none',
+                      outline: 'none',
+                      userSelect: 'text',  // Enable native text selection
+                      WebkitUserSelect: 'text',
+                    }}
+                    onClick={() => textareaRef.current?.focus()}
+                  />
                 )}
               </div>
             </div>

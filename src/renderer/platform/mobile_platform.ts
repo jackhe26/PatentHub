@@ -175,7 +175,7 @@ export default class MobilePlatform extends IndexedDBStorage implements Platform
    * @param file PDF 文件对象
    * @returns 解析结果
    */
-  async parsePdfWithPdfJs(file: File): Promise<{ content: string; error?: string; textParts?: string[][]; textBlocks?: any[][] }> {
+  async parsePdfWithPdfJs(file: File): Promise<{ content: string; error?: string; textParts?: string[]; textBlocks?: any[][] }> {
     console.log('[MobilePlatform] Starting PDF parsing, file:', file.name, 'size:', file.size)
     
     try {
@@ -238,8 +238,8 @@ export default class MobilePlatform extends IndexedDBStorage implements Platform
       }
 
       // 提取每一页的文本和带坐标的文本块
-      const textParts: string[][] = []  // 每页的段落数组，每个段落是文本块数组
-      const textBlocks: any[][] = []    // 每页的带坐标文本块（用于 Y 坐标定位）
+      const textParts: string[] = []  // 每页整页文本（用于 textarea 显示）
+      const textBlocks: any[][] = []  // 每页的带坐标文本块（用于 Y 坐标定位 + setSelectionRange）
 
       for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
         console.log('[MobilePlatform] Processing page:', pageNum)
@@ -254,6 +254,7 @@ export default class MobilePlatform extends IndexedDBStorage implements Platform
             const yPdf = item.transform ? item.transform[5] : 0
             pageBlocks.push({
               text: item.str,
+              hasEOL: item.hasEOL || false,  // 行尾标记
               yRatio: yPdf  // 归一化 Y 坐标，0=顶部，1=底部（后续会计算）
             })
           }
@@ -272,42 +273,17 @@ export default class MobilePlatform extends IndexedDBStorage implements Platform
         }
         textBlocks.push(pageBlocks)
 
-        // 合并文本项
-        const pageText = textContent.items
-          .map((item: any) => item.str)
-          .join(' ')
-          .replace(/\s+/g, ' ')
-          .trim()
-
-        // 按 Y 坐标差分段：相邻文本块 Y 差距 > 0.05 是新段落
-        const pageParagraphs: string[] = []
-        if (pageBlocks.length > 0) {
-          let currentParagraph = pageBlocks[0].text
-          for (let i = 1; i < pageBlocks.length; i++) {
-            const prevBlock = pageBlocks[i - 1]
-            const currBlock = pageBlocks[i]
-            const yDiff = Math.abs(currBlock.yRatio - prevBlock.yRatio)
-            if (yDiff > 0.05) {
-              // 新段落
-              if (currentParagraph.trim()) {
-                pageParagraphs.push(currentParagraph.trim())
-              }
-              currentParagraph = currBlock.text
-            } else {
-              currentParagraph += ' ' + currBlock.text
-            }
-          }
-          if (currentParagraph.trim()) {
-            pageParagraphs.push(currentParagraph.trim())
-          }
+        // 合并文本项，计算 charOffset（用于 setSelectionRange）
+        // 重新按 Y 坐标排序后的顺序拼接，确保 charOffset 与文本顺序一致
+        const sortedItems = [...textContent.items].filter(item => item.str && item.str.trim())
+        let charOffset = 0
+        for (const block of pageBlocks) {
+          block.charOffset = charOffset
+          charOffset += block.text.length + 1  // +1 是空格分隔符
         }
 
-        if (pageParagraphs.length > 0) {
-          textParts.push(pageParagraphs)
-        } else if (pageText) {
-          // 如果没有段落（Y分段失败），降级为整页文本作为单段落
-          textParts.push([pageText])
-        }
+        const pageText = pageBlocks.map(b => b.text).join(' ').replace(/\s+/g, ' ').trim()
+        textParts.push(pageText)
       }
 
       const fullText = textParts.join('\n\n')
@@ -317,8 +293,8 @@ export default class MobilePlatform extends IndexedDBStorage implements Platform
         return { content: '', error: 'PDF文本提取失败：PDF可能是扫描版或图片格式，请尝试使用云解析' }
       }
 
-      // Return both fullText and textParts array (per-page text for copy feature)
-      // Also return textBlocks for Y-coordinate based paragraph location
+      // Return both fullText and textParts (per-page full text for textarea display)
+      // Also return textBlocks with charOffset and hasEOL for Y-coordinate based paragraph location
       return { content: fullText, textParts, textBlocks }
     } catch (error) {
       console.error('[MobilePlatform] PDF parsing error:', error)

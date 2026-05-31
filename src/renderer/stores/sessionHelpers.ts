@@ -298,7 +298,7 @@ export async function preprocessFile(
                 log.error('Failed to store PDF raw bytes:', rawErr)
               }
 
-              const parseResult = (await platform.parsePdfWithPdfJs(file)) as { content: string; error?: string; textParts?: string[][]; textBlocks?: any[][] }
+              const parseResult = (await platform.parsePdfWithPdfJs(file)) as { content: string; error?: string; textParts?: string[]; textBlocks?: any[][] }
               if (parseResult.error) {
                 throw new Error(parseResult.error)
               }
