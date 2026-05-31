@@ -272,12 +272,9 @@ export default class MobilePlatform extends IndexedDBStorage implements Platform
         // 按原始 Y 坐标从大到小排序（大 Y = PDF 顶部 = 阅读顺序第一），然后归一化
         if (pageBlocks.length > 0) {
           pageBlocks.sort((a, b) => b.yPdf - a.yPdf)  // 大 Y 在前（小 Y 在后）= 从上到下阅读顺序
-          const maxY = pageBlocks[0].yPdf
-          const minY = pageBlocks[pageBlocks.length - 1].yPdf
-          const range = maxY - minY || 1
+          // 修复：用页面实际高度归一化（0=页面顶部，1=页面底部），与触摸坐标的容器高度比例完全对齐
           for (const block of pageBlocks) {
-            // PDF 原点在左下角，Y 越大越靠上，转换为屏幕坐标后 0=顶部，1=底部
-            block.yRatio = 1 - ((block.yPdf - minY) / range)
+            block.yRatio = 1 - (block.yPdf / pageHeight)
           }
         }
         textBlocks.push(pageBlocks)

@@ -75,6 +75,8 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
 
   // Mobile native rendering state
   const [pageImage, setPageImage] = useState<string | null>(null)
+  const [renderedW, setRenderedW] = useState(0)   // renderPage returns actual pixel width
+  const [renderedH, setRenderedH] = useState(0)   // renderPage returns actual pixel height
   const [currentPage, setCurrentPage] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
 
@@ -148,9 +150,12 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
     let minDist = Infinity
     for (let pi = 0; pi < paragraphs.length; pi++) {
       const para = paragraphs[pi]
-      const centerBlock = pageBlocks[Math.floor((para.start + para.end) / 2)]
-      const dx = (centerBlock.xRatio || 0.5) - longPressX
-      const dy = (centerBlock.yRatio || 0.5) - longPressY
+      const paraBlocks = pageBlocks.slice(para.start, para.end)
+      // Fix: use Y-coordinate average of all blocks in paragraph, not index midpoint
+      const avgY = paraBlocks.reduce((s: number, b: any) => s + (b.yRatio || 0), 0) / paraBlocks.length
+      const avgX = paraBlocks.reduce((s: number, b: any) => s + (b.xRatio || 0.5), 0) / paraBlocks.length
+      const dx = avgX - longPressX
+      const dy = avgY - longPressY
       const dist = Math.sqrt(dx * dx * 4 + dy * dy)
       if (dist < minDist) {
         minDist = dist
@@ -289,9 +294,11 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
         setTotalPages(openResult.pageCount)
         setCurrentPage(0)
 
-        // Render first page
+        // Render first page and store actual pixel dimensions
         const pageResult = await pdfRenderer.renderPage(0, 2.0)
         setPageImage(pageResult.base64)
+        setRenderedW(pageResult.width || 0)
+        setRenderedH(pageResult.height || 0)
 
         // Feature 3: Load per-page text and text blocks with Y coordinates
         try {
@@ -347,6 +354,8 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
     try {
       const result = await pdfRenderer.renderPage(newPage, 2.0)
       setPageImage(result.base64)
+      setRenderedW(result.width || 0)
+      setRenderedH(result.height || 0)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to render page')
     } finally {
@@ -364,16 +373,22 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
           onTouchStart={(e) => {
             // Feature 3: Start long-press timer for text modal
             if (e.touches.length === 1 && pageTexts.length > 0) {
-              // Capture X and Y coordinate ratios for paragraph location
               const containerHeight = (e.currentTarget as HTMLElement).clientHeight
               const containerWidth = (e.currentTarget as HTMLElement).clientWidth
-              // Reverse the scale + translate transforms to map screen touch → image content coordinates
               const rawY = e.touches[0].clientY - translateY
               const rawX = e.touches[0].clientX - translateX
-              const yRatio = (rawY / scale) / containerHeight
-              const xRatio = (rawX / scale) / containerWidth
-              setLongPressY(yRatio)
-              setLongPressX(xRatio)
+              // Fix: letterbox correction — objectFit:contain creates top/left letterbox if aspect ratios differ
+              const scaleToFit = renderedW > 0 && renderedH > 0
+                ? Math.min(containerWidth / renderedW, containerHeight / renderedH)
+                : 1
+              const displayW = renderedW * scaleToFit
+              const displayH = renderedH * scaleToFit
+              const offsetX = (containerWidth - displayW) / 2
+              const offsetY = (containerHeight - displayH) / 2
+              const imgY = ((rawY - offsetY) / scale) / displayH
+              const imgX = ((rawX - offsetX) / scale) / displayW
+              setLongPressY(imgY)
+              setLongPressX(imgX)
 
               longPressTimer.current = setTimeout(() => {
                 setShowTextModal(true)
