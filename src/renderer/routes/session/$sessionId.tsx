@@ -112,26 +112,47 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
       return
     }
 
-    // Step 1: Calculate dynamic line height (for paragraph gap threshold)
-    const lineHeights: number[] = []
+    // === Step 1: Build all paragraphs using 首行缩进 + 行距双峰算法 ===
+    // 两个段落边界条件（满足任意一个）：
+    // A. 段落间距 > p75 * 1.5（段落间距明显大于行距）
+    // B. 这一行有首行缩进（X > 正文左边距 + 阈值）
+
+    // 1A: 计算正文左边距（X坐标众数，精度5px归并）
+    const xBuckets: Record<string, number> = {}
+    for (const b of pageBlocks) {
+      const bucket = Math.round((b.xPdf || 0) / 5) * 5  // 5px精度归并
+      xBuckets[bucket] = (xBuckets[bucket] || 0) + 1
+    }
+    const bodyLeftX = Object.entries(xBuckets).reduce((best, [xStr, count]) => {
+      return count > best.count ? { x: parseFloat(xStr), count } : best
+    }, { x: 0, count: 0 }).x
+
+    // 1B: 计算行距75分位数阈值
+    const gaps: number[] = []
     for (let i = 1; i < pageBlocks.length; i++) {
       const dy = Math.abs(pageBlocks[i].yRatio - pageBlocks[i - 1].yRatio)
-      if (dy > 0 && dy < 0.1) lineHeights.push(dy)
+      if (dy > 0 && dy < 0.1) gaps.push(dy)  // 正常行距范围
     }
-    const avgLineHeight = lineHeights.length > 0
-      ? lineHeights.sort((a, b) => a - b)[Math.floor(lineHeights.length / 2)]
-      : 0.05
-    const paragraphGap = avgLineHeight * 1.5
+    gaps.sort((a, b) => a - b)
+    const p75 = gaps.length > 0 ? gaps[Math.floor(gaps.length * 0.75)] : 0.05
+    const gapThreshold = p75 * 1.5
+    const indentThreshold = bodyLeftX + 10  // 首行缩进检测阈值
 
-    // Step 2: Build all paragraphs from blocks (scan whole page in correct reading order)
+    // 1C: 扫描切割段落
     const paragraphs: { start: number; end: number; text: string }[] = []
     let paraStart = 0
     for (let i = 1; i <= pageBlocks.length; i++) {
       const isEndOfBlocks = i === pageBlocks.length
-      const isGap = !isEndOfBlocks && Math.abs((pageBlocks[i]?.yRatio || 0) - (pageBlocks[i - 1]?.yRatio || 0)) > paragraphGap
-      const isEOLGap = !isEndOfBlocks && (pageBlocks[i - 1]?.hasEOL || false) && Math.abs((pageBlocks[i]?.yRatio || 0) - (pageBlocks[i - 1]?.yRatio || 0)) > paragraphGap * 0.8
+      const prev = pageBlocks[i - 1]
+      const curr = pageBlocks[i]
+      const gap = !isEndOfBlocks ? Math.abs((curr?.yRatio || 0) - (prev?.yRatio || 0)) : 0
 
-      if (isGap || isEOLGap || isEndOfBlocks) {
+      // 条件A: 段落间距明显大于行距
+      const isBigGap = gap > gapThreshold
+      // 条件B: 当前行（段落最后一行）有首行缩进，且间距大于正常行距下限
+      const isIndentedParaEnd = (prev?.xPdf || 0) >= indentThreshold && gap > (p75 * 0.3)
+
+      if (isEndOfBlocks || isBigGap || isIndentedParaEnd) {
         const end = isEndOfBlocks ? pageBlocks.length : i
         const text = pageBlocks.slice(paraStart, end)
           .map((b: any) => b.text || '')
@@ -546,7 +567,7 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
           )}
         </div>
 
-        {/* Feature 3: Textarea with auto-selected paragraph for native Android text selection */}
+        {/* Feature 3: 3段纯文本弹窗（目标段落 ± 1，越界保护） */}
         {showTextModal && (
           <div
             style={{
@@ -568,7 +589,7 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
                 background: '#fff',
                 borderRadius: 12,
                 width: '85%',
-                height: '80%',
+                height: '65%',
                 display: 'flex',
                 flexDirection: 'column',
                 boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
@@ -576,10 +597,10 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Header — Accordion: 简洁标题，目标段落标注 */}
+              {/* Header */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
                 <span style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>
-                  第 {currentPage + 1} 页 · 长按展开段落复制
+                  第 {currentPage + 1} 页 · 目标段落 ± 1
                 </span>
                 <button
                   onClick={() => setShowTextModal(false)}
@@ -597,145 +618,49 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
                 </button>
               </div>
 
-              {/* Accordion 段落列表 */}
-              <div style={{ flex: 1, overflow: 'hidden', padding: '0 16px', display: 'flex', flexDirection: 'column' }}>
-                {allParagraphsList.length === 0 ? (
+              {/* 3段纯文本区域 */}
+              <div style={{ flex: 1, overflow: 'hidden', padding: '12px 16px', display: 'flex', flexDirection: 'column' }}>
+                {allParagraphsList.length === 0 || nearestParaIdx < 0 ? (
                   <div style={{ textAlign: 'center', color: '#9ca3af', padding: '40px 0', fontSize: 13 }}>
-                    长按 PDF 页面某处选择文字复制
+                    未找到目标段落
                   </div>
                 ) : (
-                  <>
-                    <div style={{ fontSize: 12, color: '#9ca3af', padding: '8px 0', flexShrink: 0 }}>
-                      共 {allParagraphsList.length} 段，目标: 第{nearestParaIdx + 1}段
-                    </div>
-                    <div
-                      style={{ flex: 1, overflowY: 'auto' }}
-                      ref={(el) => {
-                        // Auto-scroll to expanded paragraph when modal opens
-                        if (el && expandedIdx >= 0) {
-                          setTimeout(() => {
-                            const items = el.querySelectorAll('[data-para-idx]')
-                            const target = items[expandedIdx] as HTMLElement
-                            if (target) {
-                              const containerH = el.clientHeight
-                              const itemTop = target.offsetTop
-                              el.scrollTop = Math.max(0, itemTop - containerH / 2 + 40)
-                            }
-                          }, 50)
-                        }
-                      }}
-                    >
-                      {allParagraphsList.map((para, idx) => {
-                        const isExpanded = idx === expandedIdx
-                        const isTarget = idx === nearestParaIdx
-                        const preview = para.text.length > 40 ? para.text.substring(0, 40) + '...' : para.text
+                  (() => {
+                    // 取目标段落 ± 1，共3段，越界保护
+                    const startIdx = Math.max(0, nearestParaIdx - 1)
+                    const endIdx = Math.min(allParagraphsList.length - 1, nearestParaIdx + 1)
+                    const slices = allParagraphsList.slice(startIdx, endIdx + 1)
+                    const combinedText = slices
+                      .map((p, i) => (i > 0 ? '\n\n' : '') + p.text)
+                      .join('')
 
-                        return (
-                          <div
-                            key={idx}
-                            data-para-idx={idx}
-                            onClick={() => setExpandedIdx(isExpanded ? -1 : idx)}
-                            style={{
-                              marginBottom: 8,
-                              borderRadius: 8,
-                              border: isTarget
-                                ? '1.5px solid #3b82f6'
-                                : isExpanded
-                                ? '1px solid #d1d5db'
-                                : '1px solid #e5e7eb',
-                              background: isTarget ? '#eff6ff' : isExpanded ? '#f9fafb' : '#fff',
-                              cursor: 'pointer',
-                              overflow: 'hidden',
-                              transition: 'all 0.15s',
-                            }}
-                          >
-                            {/* 收起状态: 摘要 + 展开箭头 */}
-                            {!isExpanded && (
-                              <div style={{ padding: '10px 12px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                  <span style={{ fontSize: 11, color: '#9ca3af', minWidth: 24 }}>{idx + 1}.</span>
-                                  {isTarget && (
-                                    <span style={{ fontSize: 10, color: '#3b82f6', background: '#dbeafe', borderRadius: 4, padding: '1px 6px' }}>
-                                      目标
-                                    </span>
-                                  )}
-                                  <span style={{ marginLeft: 'auto', fontSize: 12, color: '#9ca3af' }}>▼</span>
-                                </div>
-                                <div style={{
-                                  fontSize: 12,
-                                  color: '#374151',
-                                  lineHeight: 1.6,
-                                  maxHeight: 54,
-                                  overflow: 'hidden',
-                                  paddingLeft: 24,
-                                }}>
-                                  {preview}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* 展开状态: 全文 + 复制按钮 */}
-                            {isExpanded && (
-                              <div style={{ padding: '10px 12px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                                  <span style={{ fontSize: 11, color: '#9ca3af', minWidth: 24 }}>{idx + 1}.</span>
-                                  {isTarget && (
-                                    <span style={{ fontSize: 10, color: '#3b82f6', background: '#dbeafe', borderRadius: 4, padding: '1px 6px' }}>
-                                      目标
-                                    </span>
-                                  )}
-                                  <span style={{ marginLeft: 'auto', fontSize: 12, color: '#3b82f6' }}>▲</span>
-                                </div>
-                                {/* 可选择文本区域 — 展开的段落全文 */}
-                                <div
-                                  style={{
-                                    fontSize: 13,
-                                    color: '#1f2937',
-                                    lineHeight: 1.8,
-                                    background: '#fafafa',
-                                    borderRadius: 6,
-                                    padding: '10px 12px',
-                                    border: '1px solid #e5e7eb',
-                                    userSelect: 'text',
-                                    WebkitUserSelect: 'text',
-                                    whiteSpace: 'pre-wrap',
-                                    wordBreak: 'break-word',
-                                    minHeight: 60,
-                                  }}
-                                >
-                                  {para.text}
-                                </div>
-                                {/* 一键复制按钮 */}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    navigator.clipboard.writeText(para.text).then(() => {
-                                      setCopiedIdx(idx)
-                                      setTimeout(() => setCopiedIdx(-1), 1500)
-                                    }).catch(() => {})
-                                  }}
-                                  style={{
-                                    marginTop: 6,
-                                    width: '100%',
-                                    padding: '6px 12px',
-                                    background: copiedIdx === idx ? '#dcfce7' : '#eff6ff',
-                                    border: copiedIdx === idx ? '1px solid #86efac' : '1px solid #bfdbfe',
-                                    borderRadius: 6,
-                                    fontSize: 12,
-                                    color: copiedIdx === idx ? '#16a34a' : '#2563eb',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s',
-                                  }}
-                                >
-                                  {copiedIdx === idx ? '✅ 已复制' : '📋 一键复制全段'}
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </>
+                    return (
+                      <>
+                        <div style={{ fontSize: 11, color: '#9ca3af', paddingBottom: 8, flexShrink: 0 }}>
+                          第 {startIdx + 1}–{endIdx + 1} 段（点击区域可复制）
+                        </div>
+                        <div
+                          style={{
+                            flex: 1,
+                            overflowY: 'auto',
+                            fontSize: 13,
+                            color: '#1f2937',
+                            lineHeight: 1.9,
+                            background: '#fafafa',
+                            borderRadius: 8,
+                            padding: '12px 14px',
+                            border: '1px solid #e5e7eb',
+                            userSelect: 'text',
+                            WebkitUserSelect: 'text',
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
+                          }}
+                        >
+                          {combinedText}
+                        </div>
+                      </>
+                    )
+                  })()
                 )}
               </div>
             </div>
