@@ -184,6 +184,9 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
   // Feature 3: Long-press timer for text modal
   const longPressTimer = useRef<ReturnType<typeof setTimeout>>()
 
+  // Feature 4 (bonus): Double-tap to reset scale + translate
+  const lastTapTime = useRef<number>(0)
+
   const storageKey = pdfFile.storageKey
   const filePath = pdfFile.url
   const isMobile = platform.type === 'mobile'
@@ -438,6 +441,26 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
             }
           }}
           onTouchEnd={(e) => {
+            // Feature 4: Double-tap detection — reset scale + translate to defaults
+            const now = Date.now()
+            const dx = e.changedTouches[0]?.clientX - touchStartX.current
+            const dy = e.changedTouches[0]?.clientY - touchStartY.current
+            const dist = Math.sqrt((dx || 0) ** 2 + (dy || 0) ** 2)
+            if (
+              e.changedTouches.length === 1 &&
+              e.touches.length === 0 &&
+              now - lastTapTime.current < 300 &&
+              dist < 10
+            ) {
+              // Double-tap: reset to defaults
+              setScale(1.1)
+              setTranslateX(0)
+              setTranslateY(0)
+              lastTapTime.current = 0
+            } else {
+              lastTapTime.current = now
+            }
+
             // Cancel long-press timer
             if (longPressTimer.current) {
               clearTimeout(longPressTimer.current)
@@ -878,7 +901,7 @@ function RouteComponent() {
 
   // 提取emoji头像
   const currentCopilotName = currentSession?.name || ''
-  const emojiMatch = currentCopilotName.match(/^([\u{1F300}-\u{1F9FF}])/u)
+  const emojiMatch = currentCopilotName.match(/^./su)
   const currentCopilotEmoji = emojiMatch ? emojiMatch[1] : null
 
   // 辅助函数：获取搭档头像文字（跳过表情符号）
