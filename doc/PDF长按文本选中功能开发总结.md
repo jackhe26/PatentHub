@@ -153,8 +153,43 @@ isIndentedParaEnd = (prev?.xPdf || 0) >= indentThreshold && gap > (p75 * 0.3)
 
 ---
 
+## 新增功能：字号比例缩放和段落间距还原（commit 95c122b）
+
+### 实现内容
+
+**1. 存储 fontSize 到 blocks（mobile_platform.ts）**
+```js
+const fontSize = Math.abs(transform[3] || transform[0] || 12)  // 从 transform 矩阵推算字号
+pageBlocks.push({
+  text: item.str,
+  fontSize: fontSize,  // 推算字号（pt）
+  // ...
+})
+```
+
+**2. 弹窗改为逐行渲染（$sessionId.tsx）**
+- 计算基准字号（众数，精度1归并）
+- 每行按 `fontSize / baseFontSize * 13` 比例缩放显示
+- 标题行字号更大，正文保持 13px
+- 段落间用 `marginBottom: 16` 还原段落间距
+- 行尾用 `hasEOL` 标记还原换行
+
+**效果：**
+- 标题行字号更大，正文字号正常（比例 9-22px 范围）
+- 段落间有明显空白（marginBottom: 16px）
+- 行间距接近原 PDF（lineHeight: 1.9）
+- 颜色统一黑色（无法从 pdf.js 获取）
+
+### 文件改动
+
+| 文件 | 改动内容 |
+|------|---------|
+| src/renderer/platform/mobile_platform.ts | 存储 fontSize 到 blocks（从 transform 矩阵推算） |
+| src/renderer/routes/session/$sessionId.tsx | 弹窗改为逐行渲染，字号比例缩放，段落间距还原 |
+
 ## 待优化方向
 
 1. 尝试 `page.getStructTree()` 获取 PDF 语义结构（有结构标签的学术论文精度更高）
 2. 支持更多 PDF 格式（如扫描版图片 PDF 无文本层）
 3. 段落划分的容错机制（多段合并建议）
+4. 颜色还原（需要解析 PDF 渲染指令，成本高）
