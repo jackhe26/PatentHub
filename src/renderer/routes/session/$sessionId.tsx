@@ -127,18 +127,18 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
       return count > best.count ? { x: parseFloat(xStr), count } : best
     }, { x: 0, count: 0 }).x
 
-    // 1B: 计算行距75分位数阈值
+    // 1B: 计算行距中位数（p50）阈值
     const gaps: number[] = []
     for (let i = 1; i < pageBlocks.length; i++) {
       const dy = Math.abs(pageBlocks[i].yRatio - pageBlocks[i - 1].yRatio)
       if (dy > 0 && dy < 0.1) gaps.push(dy)  // 正常行距范围
     }
     gaps.sort((a, b) => a - b)
-    const p75 = gaps.length > 0 ? gaps[Math.floor(gaps.length * 0.75)] : 0.05
-    const gapThreshold = p75 * 1.5
+    const p50 = gaps.length > 0 ? gaps[Math.floor(gaps.length * 0.5)] : 0.05
+    const gapThreshold = p50 * 1.5
     const indentThreshold = bodyLeftX + 10  // 首行缩进检测阈值
 
-    // 1C: 扫描切割段落
+    // 1C: 扫描切割段落（两个条件 OR：间距 OR 下一行首行缩进）
     const paragraphs: { start: number; end: number; text: string }[] = []
     let paraStart = 0
     for (let i = 1; i <= pageBlocks.length; i++) {
@@ -149,8 +149,8 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
 
       // 条件A: 段落间距明显大于行距
       const isBigGap = gap > gapThreshold
-      // 条件B: 当前行（段落最后一行）有首行缩进，且间距大于正常行距下限
-      const isIndentedParaEnd = (prev?.xPdf || 0) >= indentThreshold && gap > (p75 * 0.3)
+      // 条件B: 【下一行】有首行缩进，且间距不为同一行内的多个item（Y间距 > p50*0.5）
+      const isIndentedParaEnd = !isEndOfBlocks && (curr?.xPdf || 0) >= indentThreshold && gap > (p50 * 0.5)
 
       if (isEndOfBlocks || isBigGap || isIndentedParaEnd) {
         const end = isEndOfBlocks ? pageBlocks.length : i
