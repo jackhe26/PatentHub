@@ -246,15 +246,24 @@ export default class MobilePlatform extends IndexedDBStorage implements Platform
         const page = await pdf.getPage(pageNum)
         const textContent = await page.getTextContent()
 
+        // 获取页面尺寸用于计算 X 坐标归一化
+        const viewport = await page.getViewport({ scale: 1 })
+        const pageWidth = viewport.width || 612  // 默认 A4 宽度
+        const pageHeight = viewport.height || 792  // 默认 A4 高度
+
         // 提取带坐标的文本块（用于长按时定位段落）
         const pageBlocks: any[] = []
         for (const item of textContent.items) {
           if (item.str && item.str.trim()) {
-            // transform[5] 是 Y 坐标（PDF 原点在左下角）
+            // transform[4] = X 坐标, transform[5] = Y 坐标（PDF 原点在左下角）
+            const xPdf = item.transform ? item.transform[4] : 0
             const yPdf = item.transform ? item.transform[5] : 0
             pageBlocks.push({
               text: item.str,
               hasEOL: item.hasEOL || false,  // 行尾标记
+              xPdf: xPdf,  // 原始 X 坐标
+              yPdf: yPdf,  // 原始 Y 坐标
+              xRatio: xPdf / pageWidth,  // 归一化 X 坐标，0=左边，1=右边
               yRatio: yPdf  // 归一化 Y 坐标，0=顶部，1=底部（后续会计算）
             })
           }

@@ -83,34 +83,31 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
   const [textBlocks, setTextBlocks] = useState<any[][]>([])  // Text blocks with Y coordinates, charOffset, hasEOL
   const [showTextModal, setShowTextModal] = useState(false)
   const [longPressY, setLongPressY] = useState<number>(0.5)  // Y ratio for paragraph location (0=top, 1=bottom)
-  // Compute nearest paragraph text when modal opens
+  const [longPressX, setLongPressX] = useState<number>(0.5)  // X ratio for paragraph location (0=left, 1=right)
+  const [showFullParagraphList, setShowFullParagraphList] = useState(false)  // Toggle full paragraph list
+  // States for nearest paragraph display (N-1, N, N+1) and full paragraph list
   const [nearestParagraph, setNearestParagraph] = useState<string>('')
-  
-  // Compute nearest paragraph text whenever showTextModal or textBlocks/longPressY changes
+  const [allParagraphs, setAllParagraphs] = useState<string[]>([])
+  const [nearestParagraphIdx, setNearestParagraphIdx] = useState<number>(-1)
+
+  // Compute nearest paragraph text + all paragraphs whenever modal opens or position changes
   useEffect(() => {
     if (!showTextModal || textBlocks.length === 0) {
       setNearestParagraph('')
+      setAllParagraphs([])
+      setNearestParagraphIdx(-1)
       return
     }
 
     const pageBlocks = textBlocks[currentPage]
     if (!pageBlocks || pageBlocks.length === 0) {
       setNearestParagraph('')
+      setAllParagraphs([])
+      setNearestParagraphIdx(-1)
       return
     }
 
-    // Step 1: Find nearest text block by Y coordinate
-    let nearestBlockIdx = 0
-    let minDiff = Infinity
-    pageBlocks.forEach((block: any, idx: number) => {
-      const diff = Math.abs((block.yRatio || 0.5) - longPressY)
-      if (diff < minDiff) {
-        minDiff = diff
-        nearestBlockIdx = idx
-      }
-    })
-
-    // Step 2: Calculate dynamic line height (for paragraph gap threshold)
+    // Step 1: Calculate dynamic line height (for paragraph gap threshold)
     const lineHeights: number[] = []
     for (let i = 1; i < pageBlocks.length; i++) {
       const dy = Math.abs(pageBlocks[i].yRatio - pageBlocks[i - 1].yRatio)
@@ -121,43 +118,64 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
       : 0.05
     const paragraphGap = avgLineHeight * 1.5
 
-    // Step 3: Find paragraph boundaries (start and end block indices)
-    let startIdx = nearestBlockIdx
-    let endIdx = nearestBlockIdx
+    // Step 2: Build all paragraphs from blocks (scan whole page)
+    const allParagraphsList: { start: number; end: number; text: string }[] = []
+    let paraStart = 0
+    for (let i = 1; i <= pageBlocks.length; i++) {
+      const isEndOfBlocks = i === pageBlocks.length
+      const isGap = !isEndOfBlocks && Math.abs((pageBlocks[i]?.yRatio || 0) - (pageBlocks[i - 1]?.yRatio || 0)) > paragraphGap
+      const isEOLGap = !isEndOfBlocks && (pageBlocks[i - 1]?.hasEOL || false) && Math.abs((pageBlocks[i]?.yRatio || 0) - (pageBlocks[i - 1]?.yRatio || 0)) > paragraphGap * 0.8
 
-    // Expand backward to find paragraph start
-    while (startIdx > 0) {
-      const prevY = pageBlocks[startIdx - 1].yRatio || 0
-      const currY = pageBlocks[startIdx].yRatio || 0
-      if (Math.abs(currY - prevY) > paragraphGap * 0.5) {
-        break
+      if (isGap || isEOLGap || isEndOfBlocks) {
+        const end = isEndOfBlocks ? pageBlocks.length : i
+        const text = pageBlocks.slice(paraStart, end)
+          .map((b: any) => b.text || '')
+          .join(' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+        if (text) {
+          allParagraphsList.push({ start: paraStart, end, text })
+        }
+        if (!isEndOfBlocks) paraStart = i
       }
-      startIdx--
     }
 
-    // Expand forward to find paragraph end
-    while (endIdx < pageBlocks.length - 1) {
-      const currY = pageBlocks[endIdx].yRatio || 0
-      const nextY = pageBlocks[endIdx + 1].yRatio || 0
-      const isEOL = pageBlocks[endIdx].hasEOL || false
-      const yGap = Math.abs(nextY - currY)
-      // Paragraph ends when: Y gap > paragraphGap OR hasEOL AND next block is far enough
-      if (yGap > paragraphGap || (isEOL && yGap > paragraphGap * 0.8)) {
-        break
+    // Step 3: Find nearest paragraph using X+Y euclidean distance (X weight 2x for two-column layout)
+    let nearestParaIdx = 0
+    let minDist = Infinity
+    
+    for (let pi = 0; pi < allParagraphsList.length; pi++) {
+      const para = allParagraphsList[pi]
+      // Use center block of paragraph for distance calculation
+      const centerBlock = pageBlocks[Math.floor((para.start + para.end) / 2)]
+      const dx = (centerBlock.xRatio || 0.5) - longPressX
+      const dy = (centerBlock.yRatio || 0.5) - longPressY
+      // X is more important for two-column layout (weight 2x)
+      const dist = Math.sqrt(dx * dx * 4 + dy * dy)
+      if (dist < minDist) {
+        minDist = dist
+        nearestParaIdx = pi
       }
-      endIdx++
     }
 
-    // Step 4: Build paragraph text from blocks
-    const paragraphText = pageBlocks.slice(startIdx, endIdx + 1)
-      .map((b: any) => b.text || '')
-      .join(' ')
-      .replace(/\s+/g, ' ')
-      .trim()
+    // Step 4: Build display text: N-1, N, N+1 paragraphs
+    const prevPara = allParagraphsList[nearestParaIdx - 1]
+    const currPara = allParagraphsList[nearestParaIdx]
+    const nextPara = allParagraphsList[nearestParaIdx + 1]
+    
+    const displayParts: string[] = []
+    if (prevPara) displayParts.push(prevPara.text)
+    if (currPara) displayParts.push(currPara.text)
+    if (nextPara) displayParts.push(nextPara.text)
 
-    setNearestParagraph(paragraphText)
-    console.log('[PDF Preview] Nearest paragraph:', startIdx, '-', endIdx, 'text:', paragraphText.substring(0, 50))
-  }, [showTextModal, textBlocks, currentPage, longPressY])
+    const displayText = displayParts.join('\n\n')
+    setNearestParagraph(displayText || '未找到段落文本')
+    setNearestParagraphIdx(nearestParaIdx)
+    setAllParagraphs(allParagraphsList.map(p => p.text))
+
+    console.log('[PDF Preview] Nearest para:', nearestParaIdx, '/', allParagraphsList.length, 'dist:', minDist.toFixed(3), 'x:', longPressX.toFixed(2), 'y:', longPressY.toFixed(2))
+    console.log('[PDF Preview] Display 3 paras:', displayParts.map(t => t.substring(0, 30) + '...'))
+  }, [showTextModal, textBlocks, currentPage, longPressY, longPressX])
 
   // Touch gesture state
   const touchStartX = useRef<number>(0)
@@ -354,10 +372,13 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
           onTouchStart={(e) => {
             // Feature 3: Start long-press timer for text modal
             if (e.touches.length === 1 && pageTexts.length > 0) {
-              // Capture Y coordinate ratio (0=top, 1=bottom) for paragraph location
+              // Capture X and Y coordinate ratios for paragraph location
               const containerHeight = (e.currentTarget as HTMLElement).clientHeight
+              const containerWidth = (e.currentTarget as HTMLElement).clientWidth
               const yRatio = e.touches[0].clientY / containerHeight
+              const xRatio = e.touches[0].clientX / containerWidth
               setLongPressY(yRatio)
+              setLongPressX(xRatio)
 
               longPressTimer.current = setTimeout(() => {
                 setShowTextModal(true)
@@ -546,8 +567,8 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
                 </button>
               </div>
 
-              {/* Textarea - shows only nearest paragraph text for copy */}
-              <div style={{ flex: 1, overflow: 'hidden', padding: '12px 16px' }}>
+              {/* Textarea - shows N-1, N, N+1 paragraphs for copy */}
+              <div style={{ flex: showFullParagraphList ? '0 0 40%' : 1, overflow: 'hidden', padding: '12px 16px', transition: 'flex 0.2s' }}>
                 {!nearestParagraph ? (
                   <div style={{ textAlign: 'center', color: '#9ca3af', padding: '40px 0', fontSize: 13 }}>
                     长按 PDF 页面某处选择文字复制
@@ -568,11 +589,76 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
                       background: '#fafafa',
                       resize: 'none',
                       outline: 'none',
-                      userSelect: 'text',  // Enable native text selection
+                      userSelect: 'text',
                       WebkitUserSelect: 'text',
                     }}
                   />
                 )}
+              </div>
+
+              {/* Full paragraph list - collapsible */}
+              {showFullParagraphList && (
+                <div style={{ flex: 1, overflow: 'hidden', padding: '0 16px 12px', display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: '#6b7280', marginBottom: 8, flexShrink: 0 }}>
+                    全页段落 ({allParagraphs.length}段)
+                  </div>
+                  <div style={{ flex: 1, overflowY: 'auto' }}>
+                    {allParagraphs.map((para, idx) => {
+                      const isHighlight = idx === nearestParagraphIdx
+                      const preview = para.length > 50 ? para.substring(0, 50) + '...' : para
+                      return (
+                        <div key={idx} style={{
+                          marginBottom: 8,
+                          borderRadius: 6,
+                          border: isHighlight ? '1px solid #3b82f6' : '1px solid #e5e7eb',
+                          background: isHighlight ? '#eff6ff' : '#f9fafb',
+                          overflow: 'hidden',
+                        }}>
+                          <div style={{
+                            padding: '8px 10px',
+                            fontSize: 12,
+                            color: '#374151',
+                            lineHeight: 1.5,
+                            maxHeight: 60,
+                            overflow: 'hidden',
+                          }}>
+                            {preview}
+                          </div>
+                          {isHighlight && (
+                            <div style={{
+                              padding: '4px 10px',
+                              background: '#dbeafe',
+                              fontSize: 11,
+                              color: '#2563eb',
+                              textAlign: 'center',
+                            }}>
+                              ← 目标段落 ({idx + 1})
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Toggle full paragraph list */}
+              <div style={{ padding: '0 16px 12px', flexShrink: 0 }}>
+                <button
+                  onClick={() => setShowFullParagraphList(!showFullParagraphList)}
+                  style={{
+                    width: '100%',
+                    background: showFullParagraphList ? '#f3f4f6' : '#eff6ff',
+                    border: showFullParagraphList ? '1px solid #d1d5db' : '1px solid #bfdbfe',
+                    borderRadius: 6,
+                    padding: '8px 16px',
+                    fontSize: 13,
+                    color: showFullParagraphList ? '#6b7280' : '#2563eb',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {showFullParagraphList ? '▲ 收起段落列表' : `▼ 查看全文段落 (${allParagraphs.length}段)`}
+                </button>
               </div>
             </div>
           </div>
