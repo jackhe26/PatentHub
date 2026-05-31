@@ -78,9 +78,11 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
   const [currentPage, setCurrentPage] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
 
-  // Feature 3: Per-page text for copy modal
+  // Feature 3: Per-page text for copy modal (paragraph-based)
   const [pageTexts, setPageTexts] = useState<string[]>([])
   const [showTextModal, setShowTextModal] = useState(false)
+  const [expandedParagraph, setExpandedParagraph] = useState<number | null>(null)
+  const [copiedFeedback, setCopiedFeedback] = useState<number | null>(null)
 
   // Touch gesture state
   const touchStartX = useRef<number>(0)
@@ -401,7 +403,7 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
           )}
         </div>
 
-        {/* Feature 3: Text copy modal */}
+        {/* Feature 3: Paragraph-based text copy modal */}
         {showTextModal && (
           <div
             style={{
@@ -416,27 +418,28 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
               justifyContent: 'center',
               zIndex: 1000,
             }}
-            onClick={() => setShowTextModal(false)}
+            onClick={() => { setShowTextModal(false); setExpandedParagraph(null) }}
           >
             <div
               style={{
                 background: '#fff',
                 borderRadius: 12,
-                padding: 16,
-                width: '90%',
-                maxHeight: '80%',
+                width: '80%',
+                height: '80%',
                 display: 'flex',
                 flexDirection: 'column',
                 boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                overflow: 'hidden',
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              {/* Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
                 <span style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>
-                  第 {currentPage + 1} 页文本
+                  第 {currentPage + 1} 页文本 ({pageTexts[currentPage] ? pageTexts[currentPage].split('\n\n').filter((p: string) => p.trim()).length : 0} 段)
                 </span>
                 <button
-                  onClick={() => setShowTextModal(false)}
+                  onClick={() => { setShowTextModal(false); setExpandedParagraph(null) }}
                   style={{
                     background: '#f3f4f6',
                     border: 'none',
@@ -450,24 +453,75 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
                   关闭
                 </button>
               </div>
-              <textarea
-                readOnly
-                value={pageTexts[currentPage] || ''}
-                style={{
-                  flex: 1,
-                  minHeight: 200,
-                  padding: 12,
-                  border: '1px solid #e5e7eb',
-                  borderRadius: 8,
-                  fontSize: 13,
-                  color: '#374151',
-                  resize: 'none',
-                  fontFamily: 'system-ui, sans-serif',
-                  lineHeight: 1.5,
-                }}
-              />
-              <div style={{ marginTop: 8, fontSize: 11, color: '#9ca3af', textAlign: 'center' }}>
-                长按选择文字后复制
+
+              {/* Paragraph list */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+                {(pageTexts[currentPage] || '').split('\n\n').filter((p: string) => p.trim()).length === 0 ? (
+                  <div style={{ textAlign: 'center', color: '#9ca3af', padding: '40px 0', fontSize: 13 }}>
+                    本页无文本内容
+                  </div>
+                ) : (
+                  pageTexts[currentPage]?.split('\n\n').filter((p: string) => p.trim()).map((paragraph: string, idx: number) => {
+                    const isExpanded = expandedParagraph === idx
+                    const preview = paragraph.length > 30 ? paragraph.substring(0, 30) + '...' : paragraph
+                    return (
+                      <div key={idx} style={{ marginBottom: 10, borderRadius: 8, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+                        {/* Paragraph header - click to expand */}
+                        <div
+                          onClick={() => setExpandedParagraph(isExpanded ? null : idx)}
+                          style={{
+                            padding: '10px 12px',
+                            background: isExpanded ? '#f0f9ff' : '#f9fafb',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <span style={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>
+                            ▶ {idx + 1}. {preview}
+                          </span>
+                          <span style={{ fontSize: 11, color: '#9ca3af' }}>
+                            {paragraph.length}字
+                          </span>
+                        </div>
+
+                        {/* Expanded content */}
+                        {isExpanded && (
+                          <div style={{ padding: '12px', background: '#fff' }}>
+                            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.6, marginBottom: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                              {paragraph}
+                            </div>
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation()
+                                try {
+                                  await navigator.clipboard.writeText(paragraph)
+                                  setCopiedFeedback(idx)
+                                  setTimeout(() => setCopiedFeedback(null), 1500)
+                                } catch {}
+                              }}
+                              style={{
+                                background: copiedFeedback === idx ? '#22c55e' : '#3b82f6',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: 6,
+                                padding: '8px 16px',
+                                fontSize: 13,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 4,
+                              }}
+                            >
+                              {copiedFeedback === idx ? '✓ 已复制' : '一键复制'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })
+                )}
               </div>
             </div>
           </div>
