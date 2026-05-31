@@ -186,52 +186,18 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
           return
         }
 
-        // Feature 1: Handle filesystem path reference (new format from Capacitor Filesystem)
-        let base64: string
-        if (rawRef.startsWith('filesystem:')) {
-          // New format: Read from Filesystem using native path
-          const filePath = rawRef.replace('filesystem:', '')
-          try {
-            const { Filesystem, Directory } = await import('@capacitor/filesystem')
-            const uriResult = await Filesystem.getUri({ path: filePath, directory: Directory.Data })
-            const openResult = await pdfRenderer.open(uriResult.uri)
-            console.log('[PDF Preview] Opened PDF from Filesystem, pages:', openResult.pageCount)
-            setTotalPages(openResult.pageCount)
-            setCurrentPage(0)
-            const pageResult = await pdfRenderer.renderPage(0, 2.0)
-            setPageImage(pageResult.base64)
+        // Use base64 directly (stored by preprocessFile using FileReader.readAsDataURL)
+        let cleanBase64 = rawRef.includes(',') ? rawRef.split(',')[1] : rawRef
+        cleanBase64 = cleanBase64.replace(/\s/g, '')
 
-            // Also load page texts for Feature 3
-            try {
-              const pagesJson = await storage.getBlob(`${storageKey}_pdf_pages`)
-              if (pagesJson) {
-                const pages = JSON.parse(pagesJson) as string[]
-                setPageTexts(pages)
-              }
-            } catch {}
-            setLoading(false)
-            return
-          } catch (fsErr) {
-            console.error('[PDF Preview] Failed to read from Filesystem:', fsErr)
-            setError('Failed to load PDF. Please re-upload.')
-            setLoading(false)
-            return
-          }
-        } else {
-          // Legacy format: base64 string stored in IndexedDB
-          let cleanBase64 = rawRef.includes(',') ? rawRef.split(',')[1] : rawRef
-          cleanBase64 = cleanBase64.replace(/\s/g, '')
-          base64 = cleanBase64
-
-          // Sanity check: valid PDF base64 starts with "JVBERi" ("%PDF")
-          console.log('[PDF Preview] base64 prefix:', base64.substring(0, 8))
-          if (!base64.startsWith('JVBERi')) {
-            console.warn('[PDF Preview] base64 does not look like a PDF, prefix:', base64.substring(0, 8))
-          }
+        // Sanity check: valid PDF base64 starts with "JVBERi" ("%PDF")
+        console.log('[PDF Preview] base64 prefix:', cleanBase64.substring(0, 8))
+        if (!cleanBase64.startsWith('JVBERi')) {
+          console.warn('[PDF Preview] base64 does not look like a PDF, prefix:', cleanBase64.substring(0, 8))
         }
 
         // Open PDF directly with base64 — Java handles Base64.decode, no WebView btoa
-        const openResult = await pdfRenderer.openWithBase64(base64)
+        const openResult = await pdfRenderer.openWithBase64(cleanBase64)
         console.log('[PDF Preview] Opened PDF, pages:', openResult.pageCount)
         setTotalPages(openResult.pageCount)
         setCurrentPage(0)

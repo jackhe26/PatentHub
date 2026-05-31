@@ -279,48 +279,23 @@ export async function preprocessFile(
           if (platform.type === 'mobile' && file.name.toLowerCase().endsWith('.pdf') && platform.parsePdfWithPdfJs) {
             // Mobile PDF parsing using pdf.js
             try {
-              // Feature 1: Store raw PDF bytes for native rendering using Capacitor Filesystem
-              // This persists the PDF file in App's private directory, avoiding IndexedDB data loss
-              // Key convention: uniqKey + '_pdf_raw' stores "filesystem:pdf_cache/xxx.pdf" path
+              // Store raw PDF bytes in IndexedDB for native rendering (PdfRenderer.openWithBase64)
+              // Using FileReader.readAsDataURL() instead of btoa() for better memory handling on Android
               try {
-                const { Filesystem, Directory } = await import('@capacitor/filesystem')
-                const safeFileName = `${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}_${file.size}_${file.lastModified}`
-                const cacheDir = 'pdf_cache'
-                const cacheFileName = `${cacheDir}/${safeFileName}.pdf`
-
-                const arrayBuffer = await file.arrayBuffer()
-                const uint8 = new Uint8Array(arrayBuffer)
-                let bin = ''
-                for (let i = 0; i < uint8.length; i++) {
-                  bin += String.fromCharCode(uint8[i])
-                }
-                const rawBase64 = btoa(bin)
-
-                await Filesystem.writeFile({
-                  path: cacheFileName,
-                  data: rawBase64,
-                  directory: Directory.Data,
-                  recursive: true,
-                })
-
-                // Store path reference (not raw base64) in IndexedDB
-                await storage.setBlob(`${uniqKey}_pdf_raw`, `filesystem:${cacheFileName}`)
-                log.debug('Stored PDF to Filesystem:', cacheFileName)
-              } catch (rawErr) {
-                log.error('Failed to store PDF in Filesystem:', rawErr)
-                // Fallback: store raw base64 in IndexedDB (legacy path for old data or if Filesystem fails)
-                try {
-                  const arrayBuffer = await file.arrayBuffer()
-                  const uint8 = new Uint8Array(arrayBuffer)
-                  let bin = ''
-                  for (let i = 0; i < uint8.length; i++) {
-                    bin += String.fromCharCode(uint8[i])
+                const rawBase64 = await new Promise<string>((resolve, reject) => {
+                  const reader = new FileReader()
+                  reader.onload = () => {
+                    const result = reader.result as string
+                    // Remove the "data:application/pdf;base64," prefix
+                    resolve(result.split(',')[1])
                   }
-                  const rawBase64 = btoa(bin)
-                  await storage.setBlob(`${uniqKey}_pdf_raw`, rawBase64)
-                } catch (fallbackErr) {
-                  log.error('Fallback storage also failed:', fallbackErr)
-                }
+                  reader.onerror = () => reject(new Error('FileReader failed'))
+                  reader.readAsDataURL(file)
+                })
+                await storage.setBlob(`${uniqKey}_pdf_raw`, rawBase64)
+                log.debug('Stored PDF raw bytes to IndexedDB, size:', rawBase64.length)
+              } catch (rawErr) {
+                log.error('Failed to store PDF raw bytes:', rawErr)
               }
 
               const parseResult = (await platform.parsePdfWithPdfJs(file)) as { content: string; error?: string; textParts?: string[] }
