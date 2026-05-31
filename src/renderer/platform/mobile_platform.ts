@@ -256,13 +256,17 @@ export default class MobilePlatform extends IndexedDBStorage implements Platform
         for (const item of textContent.items) {
           if (item.str && item.str.trim()) {
             // transform[4] = X 坐标, transform[5] = Y 坐标（PDF 原点在左下角）
-            const xPdf = item.transform ? item.transform[4] : 0
-            const yPdf = item.transform ? item.transform[5] : 0
+            // transform[0] = 水平缩放, transform[3] = 垂直缩放（字号相关）
+            const transform = item.transform || []
+            const xPdf = transform[4] || 0
+            const yPdf = transform[5] || 0
+            const fontSize = Math.abs(transform[3] || transform[0] || 12)  // 从 transform 矩阵推算字号
             pageBlocks.push({
               text: item.str,
               hasEOL: item.hasEOL || false,  // 行尾标记
               xPdf: xPdf,  // 原始 X 坐标
               yPdf: yPdf,  // 原始 Y 坐标
+              fontSize: fontSize,  // 推算字号（pt）
               xRatio: xPdf / pageWidth,  // 归一化 X 坐标，0=左边，1=右边
               yRatio: yPdf  // 归一化 Y 坐标，0=顶部，1=底部（后续会计算）
             })

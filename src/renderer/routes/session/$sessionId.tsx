@@ -3,7 +3,7 @@ import { ActionIcon, Avatar, Box, Button, Card, Menu, Stack, Text, Group } from 
 import { IconFileTypePdf, IconFileOff, IconChevronLeft, IconChevronRight, IconMessage } from '@tabler/icons-react'
 import type { CopilotDetail, Message, ModelProvider, MessageFile } from '@shared/types'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { ForwardedRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ForwardedRef, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useStore } from 'zustand'
 import MessageList, { type MessageListRef } from '@/components/chat/MessageList'
@@ -92,7 +92,7 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
   const [copiedIdx, setCopiedIdx] = useState<number>(-1)
 
   // All paragraphs + nearest paragraph (recomputed when modal opens or position changes)
-  const [allParagraphsList, setAllParagraphsList] = useState<{ start: number; end: number; text: string }[]>([])
+  const [allParagraphsList, setAllParagraphsList] = useState<{ start: number; end: number; text: string; blocks: any[] }[]>([])
   const [nearestParaIdx, setNearestParaIdx] = useState<number>(-1)
 
   // Compute all paragraphs + nearest paragraph whenever modal opens or position changes
@@ -139,7 +139,7 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
     const indentThreshold = bodyLeftX + 10  // 首行缩进检测阈值
 
     // 1C: 扫描切割段落（两个条件 OR：间距 OR 下一行首行缩进）
-    const paragraphs: { start: number; end: number; text: string }[] = []
+    const paragraphs: { start: number; end: number; text: string; blocks: any[] }[] = []
     let paraStart = 0
     for (let i = 1; i <= pageBlocks.length; i++) {
       const isEndOfBlocks = i === pageBlocks.length
@@ -154,17 +154,28 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
 
       if (isEndOfBlocks || isBigGap || isIndentedParaEnd) {
         const end = isEndOfBlocks ? pageBlocks.length : i
-        const text = pageBlocks.slice(paraStart, end)
+        const paraBlocks = pageBlocks.slice(paraStart, end)
+        const text = paraBlocks
           .map((b: any) => b.text || '')
           .join(' ')
           .replace(/\s+/g, ' ')
           .trim()
         if (text) {
-          paragraphs.push({ start: paraStart, end, text })
+          paragraphs.push({ start: paraStart, end, text, blocks: paraBlocks })
         }
         if (!isEndOfBlocks) paraStart = i
       }
     }
+
+    // 计算基准字号（众数，精度1归并），用于字号比例缩放
+    const fontSizeBuckets: Record<string, number> = {}
+    for (const block of pageBlocks) {
+      const bucket = Math.round(block.fontSize || 12)  // 精度1
+      fontSizeBuckets[bucket] = (fontSizeBuckets[bucket] || 0) + 1
+    }
+    const baseFontSize = Object.entries(fontSizeBuckets).reduce((best, [fs, count]) => {
+      return count > best.count ? { fontSize: parseInt(fs), count } : best
+    }, { fontSize: 12, count: 0 }).fontSize
 
     // Step 3: Find nearest paragraph using X+Y euclidean distance (X weight 2x)
     let nearestIdx = 0
@@ -630,9 +641,18 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
                     const startIdx = Math.max(0, nearestParaIdx - 1)
                     const endIdx = Math.min(allParagraphsList.length - 1, nearestParaIdx + 1)
                     const slices = allParagraphsList.slice(startIdx, endIdx + 1)
-                    const combinedText = slices
-                      .map((p, i) => (i > 0 ? '\n\n' : '') + p.text)
-                      .join('')
+
+                    // 计算基准字号（众数，精度1归并）
+                    const fontSizeBuckets: Record<string, number> = {}
+                    for (const para of slices) {
+                      for (const block of para.blocks || []) {
+                        const bucket = Math.round(block.fontSize || 12)
+                        fontSizeBuckets[bucket] = (fontSizeBuckets[bucket] || 0) + 1
+                      }
+                    }
+                    const baseFontSize = Object.entries(fontSizeBuckets).reduce((best, [fs, count]) => {
+                      return count > best.count ? { fontSize: parseInt(fs), count } : best
+                    }, { fontSize: 12, count: 0 }).fontSize
 
                     return (
                       <>
@@ -643,20 +663,45 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
                           style={{
                             flex: 1,
                             overflowY: 'auto',
-                            fontSize: 13,
-                            color: '#1f2937',
-                            lineHeight: 1.9,
                             background: '#fafafa',
                             borderRadius: 8,
                             padding: '12px 14px',
                             border: '1px solid #e5e7eb',
                             userSelect: 'text',
                             WebkitUserSelect: 'text',
-                            whiteSpace: 'pre-wrap',
-                            wordBreak: 'break-word',
                           }}
                         >
-                          {combinedText}
+                          {slices.map((para, paraIdx) => {
+                            const paraBlocks = para.blocks || []
+                            // 段落内行间距用 Y 间距还原
+                            const paraElements: ReactNode[] = []
+                            for (let bi = 0; bi < paraBlocks.length; bi++) {
+                              const block = paraBlocks[bi]
+                              const fontSize = Math.round((block.fontSize || 12) / baseFontSize * 13)
+                              const displaySize = Math.min(Math.max(fontSize, 9), 22)  // 限制范围 9-22px
+                              paraElements.push(
+                                <span
+                                  key={`${bi}`}
+                                  style={{
+                                    fontSize: displaySize,
+                                    color: '#1f2937',
+                                    lineHeight: 1.9,
+                                  }}
+                                >
+                                  {block.text}{' '}
+                                </span>
+                              )
+                              // 行尾或段落尾不加换行，让空白自然处理
+                              if (block.hasEOL) {
+                                paraElements.push(<br key={`br-${bi}`} />)
+                              }
+                            }
+                            return (
+                              <div key={`para-${paraIdx}`} style={{ marginBottom: paraIdx < slices.length - 1 ? 16 : 0 }}>
+                                {paraElements}
+                              </div>
+                            )
+                          })}
                         </div>
                       </>
                     )
