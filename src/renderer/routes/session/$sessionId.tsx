@@ -83,14 +83,21 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
   const [textBlocks, setTextBlocks] = useState<any[][]>([])  // Text blocks with Y coordinates, charOffset, hasEOL
   const [showTextModal, setShowTextModal] = useState(false)
   const [longPressY, setLongPressY] = useState<number>(0.5)  // Y ratio for paragraph location (0=top, 1=bottom)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)  // Ref for setSelectionRange
-
-  // Auto-select paragraph nearest to longPressY when modal opens
+  // Compute nearest paragraph text when modal opens
+  const [nearestParagraph, setNearestParagraph] = useState<string>('')
+  
+  // Compute nearest paragraph text whenever showTextModal or textBlocks/longPressY changes
   useEffect(() => {
-    if (!showTextModal || textBlocks.length === 0 || !textareaRef.current) return
+    if (!showTextModal || textBlocks.length === 0) {
+      setNearestParagraph('')
+      return
+    }
 
     const pageBlocks = textBlocks[currentPage]
-    if (!pageBlocks || pageBlocks.length === 0) return
+    if (!pageBlocks || pageBlocks.length === 0) {
+      setNearestParagraph('')
+      return
+    }
 
     // Step 1: Find nearest text block by Y coordinate
     let nearestBlockIdx = 0
@@ -141,22 +148,15 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
       endIdx++
     }
 
-    // Step 4: Calculate char positions from block charOffset
-    const startChar = pageBlocks[startIdx].charOffset || 0
-    const endBlock = pageBlocks[endIdx]
-    const endChar = (endBlock.charOffset || 0) + (endBlock.text?.length || 0)
+    // Step 4: Build paragraph text from blocks
+    const paragraphText = pageBlocks.slice(startIdx, endIdx + 1)
+      .map((b: any) => b.text || '')
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim()
 
-    // Step 5: Set selection range and scroll to position
-    const textarea = textareaRef.current
-    textarea.focus()
-    textarea.setSelectionRange(startChar, endChar)
-    
-    // Scroll to make selection visible
-    const lineHeight = 24  // approximate line height in px
-    const lines = textarea.value.substring(0, startChar).split('\n').length
-    textarea.scrollTop = Math.max(0, (lines - 3) * lineHeight)
-
-    console.log('[PDF Preview] Selected paragraph:', startIdx, '-', endIdx, 'chars:', startChar, '-', endChar, 'yRatio:', pageBlocks[nearestBlockIdx].yRatio)
+    setNearestParagraph(paragraphText)
+    console.log('[PDF Preview] Nearest paragraph:', startIdx, '-', endIdx, 'text:', paragraphText.substring(0, 50))
   }, [showTextModal, textBlocks, currentPage, longPressY])
 
   // Touch gesture state
@@ -546,17 +546,16 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
                 </button>
               </div>
 
-              {/* Textarea - native text selection, auto-selects nearest paragraph */}
+              {/* Textarea - shows only nearest paragraph text for copy */}
               <div style={{ flex: 1, overflow: 'hidden', padding: '12px 16px' }}>
-                {!pageTexts[currentPage] ? (
+                {!nearestParagraph ? (
                   <div style={{ textAlign: 'center', color: '#9ca3af', padding: '40px 0', fontSize: 13 }}>
-                    本页无文本内容
+                    长按 PDF 页面某处选择文字复制
                   </div>
                 ) : (
                   <textarea
-                    ref={textareaRef}
                     readOnly
-                    value={pageTexts[currentPage] || ''}
+                    value={nearestParagraph}
                     style={{
                       width: '100%',
                       height: '100%',
@@ -572,7 +571,6 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
                       userSelect: 'text',  // Enable native text selection
                       WebkitUserSelect: 'text',
                     }}
-                    onClick={() => textareaRef.current?.focus()}
                   />
                 )}
               </div>
