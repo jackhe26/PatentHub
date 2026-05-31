@@ -641,18 +641,9 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
                     const startIdx = Math.max(0, nearestParaIdx - 1)
                     const endIdx = Math.min(allParagraphsList.length - 1, nearestParaIdx + 1)
                     const slices = allParagraphsList.slice(startIdx, endIdx + 1)
-
-                    // 计算基准字号（众数，精度1归并）
-                    const fontSizeBuckets: Record<string, number> = {}
-                    for (const para of slices) {
-                      for (const block of para.blocks || []) {
-                        const bucket = Math.round(block.fontSize || 12)
-                        fontSizeBuckets[bucket] = (fontSizeBuckets[bucket] || 0) + 1
-                      }
-                    }
-                    const baseFontSize = Object.entries(fontSizeBuckets).reduce((best, [fs, count]) => {
-                      return count > best.count ? { fontSize: parseInt(fs), count } : best
-                    }, { fontSize: 12, count: 0 }).fontSize
+                    const combinedText = slices
+                      .map((p, i) => (i > 0 ? '\n\n' : '') + p.text)
+                      .join('')
 
                     return (
                       <>
@@ -663,45 +654,20 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
                           style={{
                             flex: 1,
                             overflowY: 'auto',
+                            fontSize: 13,
+                            color: '#1f2937',
+                            lineHeight: 1.9,
                             background: '#fafafa',
                             borderRadius: 8,
                             padding: '12px 14px',
                             border: '1px solid #e5e7eb',
                             userSelect: 'text',
                             WebkitUserSelect: 'text',
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
                           }}
                         >
-                          {slices.map((para, paraIdx) => {
-                            const paraBlocks = para.blocks || []
-                            // 段落内行间距用 Y 间距还原
-                            const paraElements: ReactNode[] = []
-                            for (let bi = 0; bi < paraBlocks.length; bi++) {
-                              const block = paraBlocks[bi]
-                              const fontSize = Math.round((block.fontSize || 12) / baseFontSize * 13)
-                              const displaySize = Math.min(Math.max(fontSize, 9), 22)  // 限制范围 9-22px
-                              paraElements.push(
-                                <span
-                                  key={`${bi}`}
-                                  style={{
-                                    fontSize: displaySize,
-                                    color: '#1f2937',
-                                    lineHeight: 1.9,
-                                  }}
-                                >
-                                  {block.text}{' '}
-                                </span>
-                              )
-                              // 行尾或段落尾不加换行，让空白自然处理
-                              if (block.hasEOL) {
-                                paraElements.push(<br key={`br-${bi}`} />)
-                              }
-                            }
-                            return (
-                              <div key={`para-${paraIdx}`} style={{ marginBottom: paraIdx < slices.length - 1 ? 16 : 0 }}>
-                                {paraElements}
-                              </div>
-                            )
-                          })}
+                          {combinedText}
                         </div>
                       </>
                     )
