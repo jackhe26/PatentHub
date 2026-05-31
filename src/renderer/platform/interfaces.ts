@@ -70,7 +70,7 @@ export interface Platform extends Storage {
   parseFileLocally(file: File): Promise<{ key?: string; isSupported: boolean; error?: string }>
 
   // Parse PDF using pdf.js (Mobile only)
-  parsePdfWithPdfJs?(file: File): Promise<{ content: string; error?: string }>
+  parsePdfWithPdfJs?(file: File): Promise<{ content: string; error?: string; textParts?: string[][]; textBlocks?: any[][] }>
 
   // Parse file using MinerU service (Desktop only)
   parseFileWithMineru?(

@@ -79,7 +79,7 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
   const [totalPages, setTotalPages] = useState(0)
 
   // Feature 3: Per-page text for copy modal (paragraph-based)
-  const [pageTexts, setPageTexts] = useState<string[]>([])
+  const [pageTexts, setPageTexts] = useState<string[][]>([])  // Per-page paragraph arrays
   const [textBlocks, setTextBlocks] = useState<any[][]>([])  // Text blocks with Y coordinates
   const [showTextModal, setShowTextModal] = useState(false)
   const [expandedParagraph, setExpandedParagraph] = useState<number | null>(null)
@@ -236,7 +236,7 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
         try {
           const pagesJson = await storage.getBlob(`${storageKey}_pdf_pages`)
           if (pagesJson) {
-            const pages = JSON.parse(pagesJson) as string[]
+            const pages = JSON.parse(pagesJson) as string[][]
             setPageTexts(pages)
             console.log('[PDF Preview] Loaded page texts:', pages.length, 'pages')
           }
@@ -477,7 +477,7 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
               {/* Header */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
                 <span style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>
-                  第 {currentPage + 1} 页文本 ({pageTexts[currentPage] ? pageTexts[currentPage].split('\n\n').filter((p: string) => p.trim()).length : 0} 段)
+                  第 {currentPage + 1} 页文本 ({pageTexts[currentPage] ? pageTexts[currentPage].length : 0} 段)
                 </span>
                 <button
                   onClick={() => { setShowTextModal(false); setExpandedParagraph(null) }}
@@ -497,12 +497,12 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
 
               {/* Paragraph list */}
               <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
-                {(pageTexts[currentPage] || '').split('\n\n').filter((p: string) => p.trim()).length === 0 ? (
+                {!pageTexts[currentPage] || pageTexts[currentPage].length === 0 ? (
                   <div style={{ textAlign: 'center', color: '#9ca3af', padding: '40px 0', fontSize: 13 }}>
                     本页无文本内容
                   </div>
                 ) : (
-                  pageTexts[currentPage]?.split('\n\n').filter((p: string) => p.trim()).map((paragraph: string, idx: number) => {
+                  pageTexts[currentPage].map((paragraph: string, idx: number) => {
                     const isExpanded = expandedParagraph === idx
                     const preview = paragraph.length > 30 ? paragraph.substring(0, 30) + '...' : paragraph
                     return (
@@ -884,9 +884,6 @@ function RouteComponent() {
               </Menu.Dropdown>
             </Menu>
           </div>
-          <Text size="xs" c="chatbox-tertiary">
-            {selectedCopilot ? `当前: ${selectedCopilot.name}` : t('点击切换搭档')}
-          </Text>
         </Box>
         <Header session={currentSession} />
         
@@ -968,9 +965,6 @@ function RouteComponent() {
             ))}
           </Menu.Dropdown>
         </Menu>
-        <Text size="xs" c="chatbox-tertiary">
-          {selectedCopilot ? `当前: ${selectedCopilot.name}` : t('点击切换搭档')}
-        </Text>
       </Box>
       <Header session={currentSession} />
 
