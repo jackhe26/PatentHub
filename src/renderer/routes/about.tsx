@@ -25,6 +25,8 @@ import iconPNG from '@/static/icon.png'
 import IMG_WECHAT_QRCODE from '@/static/wechat_qrcode.png'
 import { useLanguage } from '@/stores/settingsStore'
 
+const GITHUB_REPO_URL = 'https://github.com/jackhe26/PatentHub'
+
 export const Route = createFileRoute('/about')({
   component: RouteComponent,
 })
@@ -52,7 +54,7 @@ function RouteComponent() {
                   variant="default"
                   radius="xl"
                   className="flex-shrink-0"
-                  onClick={() => platform.openLink(`https://chatboxai.app/redirect_app/check_update/${language}`)}
+                  onClick={() => platform.openLink(GITHUB_REPO_URL)}
                 >
                   {t('Check Update')}
                 </Button>
@@ -108,17 +110,17 @@ function RouteComponent() {
             <ListItem
               icon={<IconClipboard className="w-full h-full" />}
               title={t('Survey')}
-              link={_i18n.language === 'zh-Hans' ? 'https://jsj.top/f/fcMYEa' : 'https://jsj.top/f/RUMbvY'}
+              link={GITHUB_REPO_URL}
             />
             <ListItem
               icon={<IconPencil className="w-full h-full" />}
               title={t('Feedback')}
-              link={`https://chatboxai.app/redirect_app/feedback/${language}`}
+              link={GITHUB_REPO_URL}
             />
             <ListItem
               icon={<IconFileText className="w-full h-full" />}
               title={t('Changelog')}
-              link={`https://chatboxai.app/${language.split('-')[0] || 'en'}/help-center/changelog`}
+              link={GITHUB_REPO_URL}
             />
             <ListItem
               icon={<IconMail className="w-full h-full" />}
@@ -129,7 +131,7 @@ function RouteComponent() {
             <ListItem
               icon={<IconMessage2 className="w-full h-full" />}
               title={t('FAQs')}
-              link={`https://chatboxai.app/${language.split('-')[0] || 'en'}/help-center/chatbox-ai-service-faqs`}
+              link={GITHUB_REPO_URL}
             />
           </List>
         </Stack>

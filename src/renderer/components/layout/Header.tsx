@@ -3,7 +3,7 @@ import { ActionIcon, Flex, Title, Tooltip } from '@mantine/core'
 import type { Session } from '@shared/types'
 import { IconLayoutSidebarLeftExpand, IconMenu2, IconPencil } from '@tabler/icons-react'
 import clsx from 'clsx'
-import { useEffect } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import useNeedRoomForWinControls from '@/hooks/useNeedRoomForWinControls'
 import { useIsSmallScreen } from '@/hooks/useScreenChange'
@@ -15,7 +15,15 @@ import { ScalableIcon } from '../common/ScalableIcon'
 import Toolbar from './Toolbar'
 import WindowControls from './WindowControls'
 
-export default function Header(props: { session: Session }) {
+type HeaderProps = {
+  session: Session
+  /** 渲染在侧边栏按钮和 Session Name 之间的额外操作（如 PDF 切换按钮） */
+  leftActions?: ReactNode
+  /** 中央位置渲染的搭档选择器 */
+  copilotSelector?: ReactNode
+}
+
+export default function Header(props: HeaderProps) {
   const { t } = useTranslation()
   const showSidebar = useUIStore((s) => s.showSidebar)
   const setShowSidebar = useUIStore((s) => s.setShowSidebar)
@@ -23,7 +31,7 @@ export default function Header(props: { session: Session }) {
   const isSmallScreen = useIsSmallScreen()
   const { needRoomForMacWindowControls } = useNeedRoomForWinControls()
 
-  const { session: currentSession } = props
+  const { session: currentSession, leftActions, copilotSelector } = props
 
   // 会话名称自动生成
   useEffect(() => {
@@ -32,15 +40,12 @@ export default function Header(props: { session: Session }) {
       return
     }
 
-    // 检查是否有正在生成的消息
     const hasGeneratingMessage = currentSession.messages.some((msg) => msg.generating)
 
-    // 如果有消息正在生成，或者消息数量少于2条，不触发名称生成
     if (hasGeneratingMessage || currentSession.messages.length < 2) {
       return
     }
 
-    // 触发名称生成（在 sessionActions 中进行去重和延迟处理）
     if (currentSession.name === 'Untitled') {
       scheduleGenerateNameAndThreadName(currentSession.id)
     } else if (!currentSession.threadName) {
@@ -57,24 +62,41 @@ export default function Header(props: { session: Session }) {
 
   return (
     <>
-      <Flex h={54} align="center" px="sm" className={'flex-none title-bar'}>
-        {(!showSidebar || isSmallScreen) && (
-          <Flex align="center" className={needRoomForMacWindowControls ? 'pl-20' : ''}>
+      <Flex
+        h={54}
+        align="center"
+        px="sm"
+        gap="sm"
+        className={clsx('flex-none title-bar')}
+        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      >
+        {/* 左侧：侧边栏按钮 + 额外操作（PDF 按钮） */}
+        <Flex align="center" gap="xs" style={{ flexShrink: 0 }}>
+          {(!showSidebar || isSmallScreen) && (
             <ActionIcon
               className="controls"
               variant="subtle"
               size={isSmallScreen ? 24 : 20}
               color={isSmallScreen ? 'chatbox-secondary' : 'chatbox-tertiary'}
-              mr="sm"
               onClick={() => setShowSidebar(!showSidebar)}
             >
               {isSmallScreen ? <IconMenu2 /> : <IconLayoutSidebarLeftExpand />}
             </ActionIcon>
-          </Flex>
-        )}
+          )}
+          {leftActions}
+        </Flex>
 
-        <Flex align="center" gap={'xxs'} flex={1} {...(isSmallScreen ? { justify: 'center', pl: 28, pr: 8 } : {})}>
-          <Title order={4} fz={!isSmallScreen ? 20 : undefined} lineClamp={1}>
+        {/* 中间左：Session Name 区域（flex:1 但有 maxWidth 限制）*/}
+        <Flex
+          align="center"
+          gap="xxs"
+          style={{
+            flex: '1 1 0',
+            minWidth: 0,
+            maxWidth: isSmallScreen ? '50%' : '35%',
+          }}
+        >
+          <Title order={4} fz={!isSmallScreen ? 20 : undefined} lineClamp={1} style={{ minWidth: 0 }}>
             {currentSession?.name}
           </Title>
 
@@ -93,9 +115,18 @@ export default function Header(props: { session: Session }) {
           </Tooltip>
         </Flex>
 
-        <Toolbar sessionId={currentSession.id} />
+        {/* 中间：搭档选择器（自然居于 PDF 区域和聊天区域之间）*/}
+        {copilotSelector && (
+          <Flex align="center" style={{ flexShrink: 0 }}>
+            {copilotSelector}
+          </Flex>
+        )}
 
-        <WindowControls className="-mr-3 ml-2" />
+        {/* 右侧：用 marginLeft:auto 推到右边，容器只包裹内容不撑满空白，保留拖拽区域 */}
+        <Flex align="center" gap="sm" style={{ marginLeft: 'auto', flexShrink: 0 }}>
+          <Toolbar sessionId={currentSession.id} />
+          <WindowControls className={needRoomForMacWindowControls ? 'ml-2' : 'ml-0'} />
+        </Flex>
       </Flex>
 
       <Divider />

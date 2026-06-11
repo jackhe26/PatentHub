@@ -300,10 +300,24 @@ async function concurrentMap<T, R>(
 export async function parseFile(filePath: string) {
   log.info(`[parseFile] Start parsing: ${filePath}`)
 
-  if (isOfficeFilePath(filePath)) {
-    const isPdfFile = filePath.toLowerCase().endsWith('.pdf')
+  const isPdfFile = filePath.toLowerCase().endsWith('.pdf')
 
-    // 尝试使用 officeparser 解析
+  if (isPdfFile) {
+    // PDF 直接走 pdf-parse，绕过 officeparser（避免 pdfjs 的 worker 初始化开销）
+    try {
+      const pdfText = await parsePdfWithPdfParse2(filePath)
+      if (pdfText && pdfText.length > 0) {
+        log.info(`[pdf-parse] ✅ Success: ${filePath}, extracted ${pdfText.length} chars`)
+        return pdfText
+      }
+    } catch (pdfError) {
+      const pdfErrorMsg = pdfError instanceof Error ? pdfError.message : String(pdfError)
+      log.error('[pdf-parse] ❌ Failed:', pdfErrorMsg)
+      throw new Error(`PDF 解析失败: ${pdfErrorMsg}`)
+    }
+  }
+
+  if (isOfficeFilePath(filePath)) {
     try {
       const officeParser = requireUnpackedModule('officeparser')
       const parser = officeParser.default || officeParser
@@ -313,22 +327,6 @@ export async function parseFile(filePath: string) {
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
       log.warn(`[officeparser] ❌ Failed: ${errorMsg}`)
-
-      // PDF 解析失败时，回退到 pdf-parse 2.x
-      if (isPdfFile) {
-        log.warn('officeparser failed for PDF, falling back to pdf-parse 2.x:', filePath)
-        try {
-          const pdfText = await parsePdfWithPdfParse2(filePath)
-          if (pdfText && pdfText.length > 0) {
-            log.info(`Successfully parsed PDF with pdf-parse 2.x: ${filePath}, extracted ${pdfText.length} characters`)
-            return pdfText
-          }
-        } catch (pdfError) {
-          const pdfErrorMsg = pdfError instanceof Error ? pdfError.message : String(pdfError)
-          log.error('pdf-parse 2.x also failed:', pdfErrorMsg)
-          throw new Error(`pdf-parse 解析失败: ${pdfErrorMsg}`)
-        }
-      }
       throw new Error(`officeparser 解析失败: ${errorMsg}`)
     }
   }

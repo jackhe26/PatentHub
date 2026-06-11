@@ -1,0 +1,95 @@
+
+> patent-hub@1.2.0 dev F:\MyAI_Labs\Patent-AI\PatentHub-main
+> pnpm start
+
+
+> patent-hub@1.2.0 start F:\MyAI_Labs\Patent-AI\PatentHub-main
+> electron-vite dev
+
+[36mvite v7.3.1 [32mbuilding ssr environment for development...[36m[39m
+transforming...
+[32m✓[39m 257 modules transformed.
+rendering chunks...
+[2mout/main/[22m[36mmain.js  [39m[1m[33m1,625.66 kB[39m[22m[2m │ map: 3,241.94 kB[22m
+[32m✓ built in 2.23s[39m
+[32m
+build the electron main process successfully[39m
+[90m
+-----
+[39m
+[36mvite v7.3.1 [32mbuilding ssr environment for development...[36m[39m
+transforming...
+[32m✓[39m 1 modules transformed.
+rendering chunks...
+[2mout/preload/[22m[36mindex.js  [39m[1m[2m3.00 kB[22m[1m[22m[2m │ map: 5.04 kB[22m
+[32m✓ built in 21ms[39m
+[32m
+build the electron preload files successfully[39m
+[90m
+-----
+[39m
+
+♻️  Generating routes...
+✅ Processed routes in 154ms
+[32mdev server running for the electron renderer process at:
+[39m
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m1212[22m/[39m
+[2m  [32m➜[39m  [1mNetwork[22m[2m: use [22m[1m--host[22m[2m to expose[22m
+[32m
+start electron app...
+[39m
+
+22:09:35.704 › [store-node] › init store, config path: C:\Users\jackhe2023\AppData\Roaming\PatentHub\config.json
+📱 URL Scheme registered: chatbox-dev://
+22:09:35.828 › [knowledge-base:index] › [KB] Initializing knowledge base system...
+22:09:35.830 › [knowledge-base:index] › [KB] IPC handlers registered
+22:09:35.835 › [knowledge-base:db] › [DB] Database initialized (total_chunks column already exists)
+22:09:35.837 › [knowledge-base:db] › [DB] Database initialized
+22:09:35.837 › [knowledge-base:db] › [DB] Cleaning up processing files from previous session...
+22:09:35.838 › [knowledge-base:index] › [KB] Database initialized
+22:09:35.839 › [knowledge-base:file-loaders] › [FILE] Starting worker loop
+22:09:35.839 › [knowledge-base:index] › [KB] Worker loop started
+22:09:35.840 › [knowledge-base:index] › [KB] Knowledge base system initialized successfully in 12ms
+22:09:35.942 > tray: created
+22:09:35.947 › [app-updater] › Skip checkForUpdates because application is not packed and dev update config is not forced
+22:09:35.948 › [app-updater] › Update timer started, checking every hour
+22:09:35.950 > Registering BabelDOC PDF translation IPC handlers
+22:09:35.950 > BabelDOC PDF translation IPC handlers registered
+22:09:35.951 › [app-updater] › checkForUpdatesAndNotify called, downloadPromise is null
+22:09:35.952 › [app-updater] › Skip checkForUpdates because application is not packed and dev update config is not forced
+22:09:35.952 › [app-updater] › checkForUpdatesAndNotify called, downloadPromise is null
+22:09:35.953 › [app-updater] › Skip checkForUpdates because application is not packed and dev update config is not forced
+22:09:35.953 › [app-updater] › checkForUpdatesAndNotify called, downloadPromise is null
+22:09:35.954 › [app-updater] › Skip checkForUpdates because application is not packed and dev update config is not forced
+22:09:35.955 › [app-updater] › checkForUpdatesAndNotify called, downloadPromise is null
+22:09:35.956 › [app-updater] › Skip checkForUpdates because application is not packed and dev update config is not forced
+22:09:35.956 › [app-updater] › checkForUpdatesAndNotify called, downloadPromise is null
+22:09:35.966 › [store-node] › backup config to: C:\Users\jackhe2023\AppData\Roaming\PatentHub\config-backup-2026-06-09T14_09_35.711Z.json
+22:09:35.967 › [store-node] › auto backup: C:\Users\jackhe2023\AppData\Roaming\PatentHub\config-backup-2026-06-09T14_09_35.711Z.json
+22:09:40.486 > APP_LOG: Global error handlers initialized
+22:09:40.488 > APP_LOG: initializeApp
+22:09:40.516 > APP_LOG: migrateStorage: current storage config version: 14
+22:09:40.569 > APP_LOG: migrate done
+22:09:40.775 > APP_LOG: Initializing token estimation system
+22:09:40.777 > APP_LOG: Token estimation system initialized
+22:09:40.777 > APP_LOG: Token estimation dev tools available at window.__tokenEstimation
+22:09:41.011 › [knowledge-base:ipc-handlers] › ipcMain: kb:list
+22:10:01.285 › [knowledge-base:ipc-handlers] › ipcMain: kb:list
+22:10:09.479 › [knowledge-base:ipc-handlers] › ipcMain: kb:list
+22:10:10.980 › [knowledge-base:ipc-handlers] › ipcMain: kb:list
+22:10:24.366 › [knowledge-base:ipc-handlers] › ipcMain: kb:list
+22:10:50.314 › [knowledge-base:ipc-handlers] › ipcMain: kb:list
+22:10:54.711 › [knowledge-base:ipc-handlers] › ipcMain: kb:list
+22:11:30.123 > APP_LOG: Global error handlers initialized
+22:11:30.124 > APP_LOG: initializeApp
+22:11:30.139 > APP_LOG: migrateStorage: current storage config version: 14
+22:11:30.172 > APP_LOG: migrate done
+22:11:30.367 > APP_LOG: Initializing token estimation system
+22:11:30.369 > APP_LOG: Token estimation system initialized
+22:11:30.370 > APP_LOG: Token estimation dev tools available at window.__tokenEstimation
+22:11:30.487 › [knowledge-base:ipc-handlers] › ipcMain: kb:list
+22:11:47.296 › [knowledge-base:ipc-handlers] › ipcMain: kb:list
+22:19:35.729 › [store-node] › backup config to: C:\Users\jackhe2023\AppData\Roaming\PatentHub\config-backup-2026-06-09T14_19_35.727Z.json
+22:19:35.848 › [store-node] › auto backup: C:\Users\jackhe2023\AppData\Roaming\PatentHub\config-backup-2026-06-09T14_19_35.727Z.json
+22:24:32.119 > tray: destroyed
+22:24:32.239 > tray: skip destroy because it does not exist

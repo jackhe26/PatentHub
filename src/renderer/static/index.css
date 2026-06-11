@@ -3,11 +3,17 @@
 @tailwind utilities; */
 
 .title-bar {
-  -webkit-app-region: drag;
+  -webkit-app-region: drag !important;
 }
 
-.title-bar .controls {
-  -webkit-app-region: no-drag;
+.title-bar .controls,
+.title-bar button,
+.title-bar [role="button"],
+.title-bar input,
+.title-bar a,
+.title-bar .mantine-Menu-dropdown,
+.title-bar .mantine-Menu-item {
+  -webkit-app-region: no-drag !important;
 }
 
 body {
@@ -35,6 +41,17 @@ body,
 #root {
   /* 固定高度为100%而不是100vh或者calc(var(--vh, 1vh) * 100)，可以在解决移动端浏览器地址栏高度计算的前提下避免弹出输入法时卡顿 */
   height: 100%;
+}
+
+/* 全局 drag - frameless 窗口标准做法：root 默认 drag，内容区 no-drag */
+#root {
+  -webkit-app-region: drag;
+}
+
+.App,
+.MuiGrid-root,
+.MuiGrid-container {
+  -webkit-app-region: no-drag;
 }
 
 html[data-theme="dark"] {

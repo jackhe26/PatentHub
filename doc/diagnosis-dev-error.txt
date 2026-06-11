@@ -1,0 +1,2 @@
+[33m[plugin inject-dommatrix-polyfill] Sourcemap is likely to be incorrect: a plugin (inject-dommatrix-polyfill) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help[39m
+[31848:0609/221156.983:ERROR:CONSOLE(1)] "Request Overlay.highlightNode failed. {"code":-32600,"message":"Overlay must be enabled before a tool can be shown"}", source: devtools://devtools/bundled/core/protocol_client/protocol_client.js (1)

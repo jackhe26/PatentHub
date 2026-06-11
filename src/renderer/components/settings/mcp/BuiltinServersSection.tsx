@@ -52,7 +52,7 @@ export const BuiltinServersSection: FC = () => {
             config={config}
             enabled={mcp.enabledBuiltinServers.includes(config.id)}
             onEnabledChange={onEnabledChange}
-            accessible={isPremium}
+            accessible={true}
           />
         ))}
       </SimpleGrid>

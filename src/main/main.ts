@@ -838,12 +838,43 @@ ipcMain.handle('window:minimize', () => {
   mainWindow?.minimize()
 })
 
+let savedBounds: { x: number; y: number; width: number; height: number } | null = null
+let fallbackMaximized = false
+
 ipcMain.handle('window:maximize', () => {
-  mainWindow?.maximize()
+  if (!mainWindow) return
+  // Save current bounds before attempting maximize
+  savedBounds = mainWindow.getBounds()
+  mainWindow.maximize()
+  // Electron 26.x 已知问题：窗口未显示时 maximize() 可能静默失败
+  // 50ms 后检查是否真的最大化
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isMaximized()) {
+      console.warn('[window:maximize] maximize() failed, using setBounds fallback')
+      const { screen } = require('electron')
+      const display = screen.getPrimaryDisplay()
+      const workArea = display.workArea
+      mainWindow.setBounds({
+        x: workArea.x,
+        y: workArea.y,
+        width: workArea.width,
+        height: workArea.height,
+      })
+      fallbackMaximized = true
+      mainWindow.webContents.send('window:maximized-changed', true)
+    }
+  }, 50)
 })
 
 ipcMain.handle('window:unmaximize', () => {
-  mainWindow?.unmaximize()
+  if (!mainWindow) return
+  if (fallbackMaximized && savedBounds) {
+    mainWindow.setBounds(savedBounds)
+    fallbackMaximized = false
+    mainWindow.webContents.send('window:maximized-changed', false)
+  } else {
+    mainWindow.unmaximize()
+  }
 })
 
 ipcMain.handle('window:close', () => {
