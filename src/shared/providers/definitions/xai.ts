@@ -13,14 +13,22 @@ export const xaiProvider = defineProvider({
     apiHost: 'https://api.x.ai',
     models: [
       {
-        modelId: 'grok-4-1-fast-reasoning',
-        contextWindow: 2_000_000,
+        modelId: 'grok-4.3',
+        contextWindow: 1_000_000,
         capabilities: ['vision', 'tool_use', 'reasoning'],
       },
       {
-        modelId: 'grok-4-1-fast-non-reasoning',
-        contextWindow: 2_000_000,
+        modelId: 'grok-build-0.1',
+        contextWindow: 1_000_000,
         capabilities: ['vision', 'tool_use'],
+      },
+      {
+        modelId: 'grok-imagine-image',
+        capabilities: ['image'],
+      },
+      {
+        modelId: 'grok-imagine-image-pro',
+        capabilities: ['image'],
       },
     ],
   },

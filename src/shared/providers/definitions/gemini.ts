@@ -14,40 +14,38 @@ export const geminiProvider = defineProvider({
     // https://ai.google.dev/models/gemini
     models: [
       {
-        modelId: 'gemini-3-pro-preview',
+        modelId: 'gemini-3.1-pro-preview',
         capabilities: ['vision', 'reasoning', 'tool_use'],
         contextWindow: 1_000_000,
         maxOutput: 8_192,
       },
       {
-        modelId: 'gemini-3-pro-image-preview',
+        modelId: 'gemini-3.1-flash-lite-preview',
+        capabilities: ['vision', 'reasoning', 'tool_use'],
+        contextWindow: 1_000_000,
+        maxOutput: 8_192,
+      },
+      {
+        modelId: 'gemini-3.1-flash-lite-image',
         capabilities: ['vision'],
         contextWindow: 32_768,
         maxOutput: 8_192,
       },
       {
-        modelId: 'gemini-2.5-flash',
-        capabilities: ['vision', 'reasoning', 'tool_use'],
-        contextWindow: 1_000_000,
-        maxOutput: 8_192,
-      },
-      {
-        modelId: 'gemini-2.5-pro',
-        capabilities: ['vision', 'reasoning', 'tool_use'],
-        contextWindow: 1_000_000,
-        maxOutput: 8_192,
-      },
-      {
-        modelId: 'gemini-2.5-flash-image',
+        modelId: 'gemini-3.1-flash-image-preview',
         capabilities: ['vision'],
         contextWindow: 32_768,
         maxOutput: 8_192,
       },
       {
-        modelId: 'gemini-2.0-flash',
+        modelId: 'gemini-3.1-flash-image-preview-4k',
         capabilities: ['vision'],
-        contextWindow: 1_000_000,
+        contextWindow: 32_768,
         maxOutput: 8_192,
+      },
+      {
+        modelId: 'nano-banana-pro-4k',
+        capabilities: ['image'],
       },
     ],
   },

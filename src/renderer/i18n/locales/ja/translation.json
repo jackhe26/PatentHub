@@ -147,7 +147,7 @@
   "Chatbox Guide": "Chatbox ガイド",
   "Chatbox is ready. To save resources, please start a new chat to continue.": "Chatbox の準備が整いました。リソースを節約するため、続行するには新しいチャットを開始してください。",
   "Chatbox OCRs images with this model and sends the text to models without image support.": "Chatboxは、このモデルで画像をOCR処理し、そのテキストを画像入力に対応していないモデルに送信します。",
-  "Chatbox respects your privacy and only uploads anonymous error data and events when necessary. You can change your preferences at any time in the settings.": "Chatboxはあなたのプライバシーを尊重し、必要な場合にのみ匿名のエラーデータとイベントをアップロードします。設定でいつでも設定を変更できます。",
+  "Chatbox respects your privacy and only uploads anonymous error data and events when necessary. You can change your preferences at any time in the settings.": "PatentHubはあなたのプライバシーを尊重し、必要な場合にのみ匿名のエラーデータとイベントをアップロードします。設定でいつでも設定を変更できます。",
   "Chatbox Search is a paid feature with advanced capabilities and better performance.": "Chatbox Search は、高度な機能と優れたパフォーマンスを備えた有料機能です。",
   "Chatbox will automatically use this model to construct search term.": "Chatboxは自動的にこのモデルを使用して検索語を構築します。",
   "Chatbox will automatically use this model to rename threads.": "Chatboxは自動的にこのモデルを使用してスレッドの名前を変更します。",

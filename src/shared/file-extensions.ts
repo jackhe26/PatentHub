@@ -1,4 +1,4 @@
-export const officeExts = ['.pdf', '.docx', '.pptx', '.xlsx', '.odt', '.odp', '.ods']
+export const officeExts = ['.pdf', '.docx', '.pptx', '.xlsx', '.odt', '.odp', '.ods', '.doc', '.xls', '.ppt', '.wps', '.et', '.dps']
 
 export function isOfficeFilePath(filePath: string) {
   return officeExts.some((ext) => filePath.toLowerCase().endsWith(ext))
@@ -270,6 +270,10 @@ export function getFileAcceptConfig(): Record<string, string[]> {
       '.gradle',
       '.jsp',
       '.aspx',
+      // WPS Office 私有格式
+      '.wps',
+      '.et',
+      '.dps',
     ],
   }
 }

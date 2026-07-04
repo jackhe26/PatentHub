@@ -1,4 +1,31 @@
 const changelog = `
+## v1.3.6 - 2026.07.04
+1. 新增 3 个国产大模型提供商：Moonshot (Kimi)、MiniMax、智谱 (ChatGLM)
+2. 更新 6 家模型提供商默认模型列表（OpenAI、Claude、Gemini、DeepSeek、xAI、VolcEngine）
+3. 新增图像生成模型支持（gpt-image-2、grok-imagine-image 等）
+4. 新增 Qwen (通义千问) 大模型提供商
+5. 新增 PDF OCR 功能（myOCR 本地离线 OCR 服务）
+6. 新增 MinerU-Office 云端 PDF 解析服务商
+7. 新增 PDF Markdown 重建功能
+8. 新增 PDF HTML 直接渲染功能
+9. 新增 WPS 及旧版 Office 文档解析支持
+10. 新增 Android PDF 本地解析与渲染
+11. 新增图片生成功能（DALL-E 3）
+12. 新增审查搭档功能
+13. 新增百度搜索功能
+14. 修复 PDF 导出失败回退 HTML 问题
+15. 修复 HTML 转 PDF 空白问题
+16. 修复 PDF 渲染问题
+17. 修复 Electron 打包模块加载问题
+18. 修复 Android 打包问题
+19. 修复 Portable 版启动崩溃
+
+## v1.2.8 - 2026.06.19
+1. 修复 Portable 版启动时弹 "Cannot find module 'cfb'" 错误导致崩溃的问题
+2. 新增旧版及 WPS 私有格式文档解析：.doc / .wps / .xls / .et / .ppt / .dps
+3. .ppt 二进制格式支持 Python + PowerPoint COM 自动转换为 .pptx 后再解析（文本完整度提升到 100%）
+4. 文件图标新增 WPS 私有格式（.wps / .et / .dps）专属图标
+
 ## v1.19.0
 1. 新增上下文管理功能：自动压缩上下文，Token 使用百分比显示与上下文长度错误检测
 2. 默认最大上下文消息数改为无限制

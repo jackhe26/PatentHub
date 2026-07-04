@@ -1,4 +1,31 @@
 const changelog = `
+## v1.3.6 - 2026.07.04
+1. 新增 3 個國產大模型提供商：Moonshot (Kimi)、MiniMax、智譜 (ChatGLM)
+2. 更新 6 家模型提供商預設模型列表（OpenAI、Claude、Gemini、DeepSeek、xAI、VolcEngine）
+3. 新增圖像生成模型支援（gpt-image-2、grok-imagine-image 等）
+4. 新增 Qwen (通義千問) 大模型提供商
+5. 新增 PDF OCR 功能（myOCR 本地離線 OCR 服務）
+6. 新增 MinerU-Office 雲端 PDF 解析服務商
+7. 新增 PDF Markdown 重建功能
+8. 新增 PDF HTML 直接渲染功能
+9. 新增 WPS 及舊版 Office 文件解析支援
+10. 新增 Android PDF 本地解析與渲染
+11. 新增圖片生成功能（DALL-E 3）
+12. 新增審查搭檔功能
+13. 新增百度搜索功能
+14. 修復 PDF 匯出失敗回退 HTML 問題
+15. 修復 HTML 轉 PDF 空白問題
+16. 修復 PDF 渲染問題
+17. 修復 Electron 打包模組載入問題
+18. 修復 Android 打包問題
+19. 修復 Portable 版啟動崩潰
+
+## v1.2.8 - 2026.06.19
+1. 修復 Portable 版啟動時彈 "Cannot find module 'cfb'" 錯誤導致崩潰的問題
+2. 新增舊版及 WPS 私有格式文檔解析：.doc / .wps / .xls / .et / .ppt / .dps
+3. .ppt 二進位格式支援 Python + PowerPoint COM 自動轉換為 .pptx 後再解析（文字完整度提升到 100%）
+4. 檔案圖示新增 WPS 私有格式（.wps / .et / .dps）專屬圖示
+
 ## v1.15.4 - 2025.08.12
 
 1. 修復移動端「提升網路相容性」功能，支援跨域 API 請求

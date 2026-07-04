@@ -19,7 +19,7 @@ export type SettingWindowTab = 'ai' | 'display' | 'chat' | 'advanced' | 'extensi
 
 export type ExportChatScope = 'all_threads' | 'current_thread'
 
-export type ExportChatFormat = 'Markdown' | 'TXT' | 'HTML'
+export type ExportChatFormat = 'Markdown' | 'TXT' | 'HTML' | 'PDF' | 'DOCX'
 
 export function isChatSession(session: Session) {
   return session.type === 'chat' || !session.type

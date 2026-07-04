@@ -22,6 +22,10 @@ import cSharpIcon from '../static/icons/icons8-c-sharp-48.png'
 import rustIcon from '../static/icons/icons8-rust-48.png'
 import shellIcon from '../static/icons/icons8-shell-48.png'
 import xmlIcon from '../static/icons/icons8-xml-48.png'
+// WPS Office 图标
+import wpsIcon from '../static/icons/icons8-wps-writer-48.png'
+import etIcon from '../static/icons/icons8-wps-spreadsheets-48.png'
+import dpsIcon from '../static/icons/icons8-wps-presentation-48.png'
 
 export default function FileIcon(props: { filename: string; className?: string }) {
   const { filename, className } = props
@@ -37,8 +41,13 @@ export default function FileIcon(props: { filename: string; className?: string }
     pdf: pdfIcon,
     xls: xlsxIcon,
     xlsx: xlsxIcon,
+    ppt: pptIcon,
     pptx: pptIcon,
     csv: csvIcon,
+    // WPS Office 私有格式
+    wps: wpsIcon,
+    et: etIcon,
+    dps: dpsIcon,
 
     ts: tsIcon,
     tsx: tsIcon,

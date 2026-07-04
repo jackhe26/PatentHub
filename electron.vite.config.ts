@@ -296,6 +296,9 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 1212,
         strictPort: true,
+        // 监听所有网卡，使局域网其他电脑也能访问开发服务器
+        host: '0.0.0.0',
+        cors: true,
       },
       define: {
         'process.type': '"renderer"',

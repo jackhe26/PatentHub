@@ -29,6 +29,7 @@ import platform from './platform'
 import icon from './static/icon.png'
 import { useLanguage } from './stores/settingsStore'
 import { useUIStore } from './stores/uiStore'
+import { featureFlags } from './utils/feature-flags'
 import { CHATBOX_BUILD_PLATFORM } from './variables'
 
 export default function Sidebar() {
@@ -189,10 +190,12 @@ export default function Sidebar() {
               <ScalableIcon icon={IconPhotoPlus} className="mr-2" />
               {t('Create Image')}
             </Button>
-            <Button variant="light" fullWidth onClick={handleOpenPDFTranslate}>
-              <ScalableIcon icon={IconFileTypeJs} className="mr-2" />
-              {t('PDF Translate')}
-            </Button>
+            {featureFlags.pdfTranslate && (
+              <Button variant="light" fullWidth onClick={handleOpenPDFTranslate}>
+                <ScalableIcon icon={IconFileTypeJs} className="mr-2" />
+                {t('PDF Translate')}
+              </Button>
+            )}
           </Stack>
           <NavLink
             c="chatbox-secondary"

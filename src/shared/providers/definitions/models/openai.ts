@@ -11,6 +11,7 @@ import { normalizeOpenAIApiHostAndPath } from '../../../utils/llm_utils'
 interface Options {
   apiKey: string
   apiHost: string
+  apiPath?: string
   model: ProviderModelInfo
   dalleStyle: 'vivid' | 'natural'
   temperature?: number

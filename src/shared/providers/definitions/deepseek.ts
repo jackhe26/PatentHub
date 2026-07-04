@@ -21,6 +21,16 @@ export const deepseekProvider = defineProvider({
         contextWindow: 128_000,
         capabilities: ['reasoning', 'tool_use'],
       },
+      {
+        modelId: 'deepseek-v4-pro',
+        contextWindow: 1_000_000,
+        capabilities: ['reasoning', 'tool_use'],
+      },
+      {
+        modelId: 'deepseek-v4-flash',
+        contextWindow: 1_000_000,
+        capabilities: ['reasoning', 'tool_use'],
+      },
     ],
   },
   createModel: (config) => {

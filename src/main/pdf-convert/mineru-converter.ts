@@ -1,14 +1,11 @@
 /**
- * MinerU PDF 转换器 (v7.10 简化版)
+ * MinerU PDF 转换器 (v9.0 整合版)
  *
- * 设计原则：与 src/main/knowledge-base/parsers/mineru-parser.ts 独立
- *
- * v7.10 重构:
- *   - 不再输出 PDF OCR 文件 (排版糟糕, 已弃用)
- *   - 只调 MinerU API 获取 ZIP, 保存到原 PDF 同目录
- *   - HTML 生成交给 ipc-handlers 的 pdf-convert:build-html
- *
- * API 调用流程参考 mineru-parser.ts，但代码完全独立维护。
+ * v9.0 改动:
+ *   - 合并 MinerU-Office 能力: 默认 extra_formats: ['docx', 'html']
+ *   - 下载 ZIP → 解压到 {baseName}_OCR_{N}/ → 删除 ZIP
+ *   - HTML 渲染从解压目录读取 JSON/images（效果 > ZIP 自带 html）
+ *   - 序号命名: {baseName}_OCR_{N} 替代时间戳
  */
 
 // @ts-expect-error - adm-zip 没有官方类型
@@ -29,6 +26,8 @@ const MINERU_API_BASE = 'https://mineru.net/api/v4'
 const POLL_INTERVAL_MS = 10000
 const MAX_POLL_ATTEMPTS = 30
 const MAX_FILE_SIZE = 200 * 1024 * 1024
+/** v9.0: 默认开启 docx + html 两种 Office 格式输出 */
+const EXTRA_FORMATS = ['docx', 'html'] as const
 
 interface BatchUploadResponse {
   code: number
@@ -55,7 +54,6 @@ interface BatchResultResponse {
     extract_result: ExtractResult[]
   }
 }
-
 
 /**
  * v8.0: 安全加载 adm-zip（兼容打包后 asar.unpacked 环境）
@@ -89,22 +87,44 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 /**
- * 生成 ZIP 文件路径（在原 PDF 同目录）
- * 格式：{原PDF基名}_mineru_{时间戳}.zip
- * 示例：WOSA_PCT_mineru_20260620_000630.zip
+ * 生成解压目录路径（在原 PDF 同目录）
+ * 格式：{原PDF基名}_OCR_{序号}
+ * 示例：WOSA_PCT_OCR_1/
  */
-function generateZipPath(originalPdfPath: string): string {
+function generateExtractDirPath(originalPdfPath: string): string {
   const dir = path.dirname(originalPdfPath)
   const baseName = path.basename(originalPdfPath, path.extname(originalPdfPath))
-  const now = new Date()
-  const timestamp =
-    now.getFullYear().toString() +
-    String(now.getMonth() + 1).padStart(2, '0') +
-    String(now.getDate()).padStart(2, '0') + '_' +
-    String(now.getHours()).padStart(2, '0') +
-    String(now.getMinutes()).padStart(2, '0') +
-    String(now.getSeconds()).padStart(2, '0')
-  return path.join(dir, `${baseName}_mineru_${timestamp}.zip`)
+  const n = getNextSequenceNumber(dir, baseName)
+  return path.join(dir, `${baseName}_OCR_${n}`)
+}
+
+/**
+ * 计算下一个可用序号
+ * 扫描目录中 {baseName}_OCR_{N} 格式，取 max(N)+1
+ */
+function getNextSequenceNumber(dir: string, baseName: string): number {
+  const esc = baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\\\$&')
+  const pattern = new RegExp(`^${esc}_OCR_(\\\\d+)$`)
+  let maxN = 0
+  try {
+    for (const entry of fs.readdirSync(dir)) {
+      const m = entry.match(pattern)
+      if (m) {
+        const n = parseInt(m[1], 10)
+        if (!isNaN(n) && n > maxN) maxN = n
+      }
+    }
+  } catch { /* 目录不存在或不可读，从 1 开始 */ }
+  return maxN + 1
+}
+
+/**
+ * 清理临时目录（安全删除）
+ */
+async function safeRm(dir: string): Promise<void> {
+  try {
+    await fs.promises.rm(dir, { recursive: true, force: true })
+  } catch { /* 忽略删除失败 */ }
 }
 
 export class MineruConverter implements PDFConverter {
@@ -126,6 +146,7 @@ export class MineruConverter implements PDFConverter {
         body: JSON.stringify({
           files: [],
           model_version: 'vlm',
+          extra_formats: [...EXTRA_FORMATS],
         }),
       })
 
@@ -147,9 +168,8 @@ export class MineruConverter implements PDFConverter {
   }
 
   /**
-   * v7.10: 只下载 ZIP, 不再重建 PDF
-   * 返回: outputPath = ZIP 路径, debugZipPath = 同样 ZIP 路径
-   * HTML 生成由 pdf-convert:build-html handler 处理
+   * v9.0: 下载 ZIP → 解压到目录 → 删除 ZIP
+   * 返回: outputPath = 解压目录, debugZipPath = 同样目录
    */
   async convert(
     input: ConvertInput,
@@ -192,38 +212,52 @@ export class MineruConverter implements PDFConverter {
       throw new Error('MinerU 未返回结果链接')
     }
 
-    // 4. 下载 ZIP 并保存到原 PDF 同目录
+    // 4. 下载 ZIP 到临时位置
     onProgress({ progress: 80, message: '下载结果 ZIP...' })
-    const zipPath = generateZipPath(filePath)
-    await this.downloadZip(extractResult.full_zip_url, zipPath)
-    console.log(`[MinerUConverter] ✅ ZIP 已保存到: ${zipPath}`)
+    const tempDir = path.join(os.tmpdir(), `mineru-${Date.now()}`)
+    await fs.promises.mkdir(tempDir, { recursive: true })
+    const tempZipPath = path.join(tempDir, 'result.zip')
 
-    // 5. 读取 markdown (如果有)
-    let markdown = ''
     try {
-      const tempDir = path.join(os.tmpdir(), `mineru-read-md-${Date.now()}`)
-      await fs.promises.mkdir(tempDir, { recursive: true })
+      await this.downloadZip(extractResult.full_zip_url, tempZipPath)
+
+      // 5. 解压 ZIP 到原 PDF 同目录
+      onProgress({ progress: 85, message: '解压文件...' })
+      const extractDir = generateExtractDirPath(filePath)
+      await fs.promises.mkdir(extractDir, { recursive: true })
+
+      const AdmZip: any = getAdmZip()
+      const zip = new AdmZip(tempZipPath)
+      zip.extractAllTo(extractDir, true)
+      console.log(`[MinerUConverter] ✅ ZIP 已解压到: ${extractDir}`)
+
+      // 6. 删除 ZIP 文件（解压后不再需要）
       try {
-        const AdmZip: any = getAdmZip()
-        const zip = new AdmZip(zipPath)
-        const mdEntry = zip.getEntries().find((e: any) => e.entryName.endsWith('.md') && !e.isDirectory)
-        if (mdEntry) {
-          markdown = mdEntry.getData().toString('utf-8')
-          console.log(`[MinerUConverter] 📄 读取 markdown: ${markdown.length} 字符`)
-        }
-      } finally {
-        await fs.promises.rm(tempDir, { recursive: true, force: true }).catch(() => undefined)
+        await fs.promises.unlink(tempZipPath)
+        await safeRm(tempDir)
+        console.log(`[MinerUConverter] 🗑️ ZIP 已删除`)
+      } catch (err) {
+        console.warn('[MinerUConverter] 删除 ZIP 失败:', err)
+      }
+
+      // 7. 从解压目录中提取 docx/html/md 路径
+      onProgress({ progress: 92, message: '整理输出文件...' })
+      const { outputDocxPath, outputHtmlPath, markdown } =
+        await this.scanExtractedDir(extractDir)
+
+      onProgress({ progress: 100, message: '转换完成！' })
+
+      return {
+        outputPath: extractDir,        // v9.0: 解压目录路径
+        markdown,
+        debugZipPath: extractDir,       // v9.0: 同样指向解压目录
+        outputDocxPath,
+        outputHtmlPath,
       }
     } catch (err) {
-      console.warn('[MinerUConverter] 读取 markdown 失败:', err)
-    }
-
-    onProgress({ progress: 100, message: '转换完成！' })
-
-    return {
-      outputPath: zipPath,        // v7.10: outputPath 现在是 ZIP 路径
-      markdown,
-      debugZipPath: zipPath,       // v7.10: 同样提供 debugZipPath
+      // 出错时清理临时目录
+      await safeRm(tempDir)
+      throw err
     }
   }
 
@@ -246,6 +280,8 @@ export class MineruConverter implements PDFConverter {
         model_version: 'vlm',
         enable_formula: true,
         enable_table: true,
+        // v9.0: 默认开启 docx + html
+        extra_formats: [...EXTRA_FORMATS],
       }),
       signal,
     })
@@ -331,7 +367,7 @@ export class MineruConverter implements PDFConverter {
   }
 
   /**
-   * 下载 ZIP 到本地路径
+   * 下载 ZIP 到临时路径
    */
   private async downloadZip(zipUrl: string, destPath: string): Promise<void> {
     const response = await fetch(zipUrl)
@@ -340,14 +376,54 @@ export class MineruConverter implements PDFConverter {
     }
 
     const arrayBuffer = await response.arrayBuffer()
-
-    // 确保目录存在
     const dir = path.dirname(destPath)
     if (!fs.existsSync(dir)) {
       await fs.promises.mkdir(dir, { recursive: true })
     }
-
-    // 写入文件 (转 Uint8Array 避免 Buffer 类型冲突)
     await fs.promises.writeFile(destPath, new Uint8Array(arrayBuffer))
+  }
+
+  /**
+   * v9.0: 扫描解压目录，提取 docx/html/md 路径
+   */
+  private async scanExtractedDir(
+    extractDir: string
+  ): Promise<{ outputDocxPath?: string; outputHtmlPath?: string; markdown: string }> {
+    let outputDocxPath: string | undefined
+    let outputHtmlPath: string | undefined
+    let markdown = ''
+
+    try {
+      const entries = await fs.promises.readdir(extractDir, { withFileTypes: true })
+
+      for (const entry of entries) {
+        if (entry.isDirectory()) continue
+        const filePath = path.join(extractDir, entry.name)
+        const lower = entry.name.toLowerCase()
+
+        if (lower.endsWith('.docx')) {
+          outputDocxPath = filePath
+          console.log(`[MinerUConverter] 📄 发现 docx: ${filePath}`)
+        } else if (lower.endsWith('.html')) {
+          outputHtmlPath = filePath
+          console.log(`[MinerUConverter] 🌐 发现 html: ${filePath}`)
+        } else if (lower.endsWith('.md')) {
+          markdown = await fs.promises.readFile(filePath, 'utf-8')
+          console.log(`[MinerUConverter] 📄 读取 markdown: ${markdown.length} 字符`)
+        }
+      }
+
+      // 如果没找到 md（MinerU 有时用其他命名），尝试读第一个 .md
+      if (!markdown) {
+        const mdFile = entries.find((e) => !e.isDirectory() && e.name.toLowerCase().endsWith('.md'))
+        if (mdFile) {
+          markdown = await fs.promises.readFile(path.join(extractDir, mdFile.name), 'utf-8')
+        }
+      }
+    } catch (err) {
+      console.warn('[MinerUConverter] 扫描解压目录失败:', err)
+    }
+
+    return { outputDocxPath, outputHtmlPath, markdown }
   }
 }

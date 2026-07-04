@@ -12,8 +12,8 @@ const ALL_PARSER_OPTIONS: {
   desktopOnly?: boolean
   mobileWebOnly?: boolean
 }[] = [
-  { value: 'none', label: 'Text Only', mobileWebOnly: true }, // Basic text file support only (mobile/web only)
-  { value: 'local', label: 'Local', desktopOnly: true }, // Only available on desktop
+  { value: 'none', label: 'Text Only' }, // Basic text file support only
+  { value: 'local', label: 'Local' }, // Available on all platforms (desktop uses pdf-parse, mobile/web uses pdf.js)
   { value: 'chatbox-ai', label: 'Chatbox AI' },
   { value: 'mineru', label: 'MinerU', desktopOnly: true }, // Only available on desktop (requires IPC)
 ]

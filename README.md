@@ -20,7 +20,7 @@
   <a href="#"><img alt="Linux" src="https://img.shields.io/badge/Linux-FCC624?style=flat-square&logo=linux&logoColor=black" /></a>
   <a href="#"><img alt="Android" src="https://img.shields.io/badge/Android-3DDC84?style=flat-square&logo=android&logoColor=white" /></a>
   <a href="#"><img alt="License" src="https://img.shields.io/badge/License-GPLv3-green?style=flat-square" /></a>
-  <img alt="Version" src="https://img.shields.io/badge/Version-1.2.6-blue?style=flat-square" />
+  <img alt="Version" src="https://img.shields.io/badge/Version-1.3.6-blue?style=flat-square" />
 </p>
 
 <p align="center">
@@ -51,14 +51,14 @@ PatentHub 是一款基于 AI 大语言模型的桌面/移动应用程序，专�
 
 | 平台 | 安装包 | 说明 |
 |------|--------|------|
-| <img src="https://img.icons8.com/color/24/windows-10.png" width="20"/> **Windows** | [📥 下载 Setup.exe](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.2.6-Setup.exe) | 安装版，支持自定义安装目录 |
-| <img src="https://img.icons8.com/color/24/windows-10.png" width="20"/> **Windows (便携版)** | [📥 下载 Portable.exe](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.2.6-Portable.exe) | 免安装，即开即用 |
-| <img src="https://img.icons8.com/mac-os/24/mac-os.png" width="20"/> **macOS (Intel)** | [📥 下载 .dmg](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.2.6.dmg) | 适用于 Intel 芯片 Mac |
-| <img src="https://img.icons8.com/mac-os/24/mac-os.png" width="20"/> **macOS (Apple Silicon)** | [📥 下载 .dmg](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.2.6-arm64.dmg) | 适用于 M1/M2/M3/M4 芯片 Mac |
-| <img src="https://img.icons8.com/color/24/linux--v1.png" width="20"/> **Linux (AppImage, x64)** | [📥 下载 .AppImage](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.2.6-x64.AppImage) | 通用 Linux 格式 (x64) |
-| <img src="https://img.icons8.com/color/24/linux--v1.png" width="20"/> **Linux (AppImage, arm64)** | [📥 下载 .AppImage](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.2.6-arm64.AppImage) | 通用 Linux 格式 (arm64) |
-| <img src="https://img.icons8.com/color/24/linux--v1.png" width="20"/> **Linux (deb, x64)** | [📥 下载 .deb](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.2.6-amd64.deb) | Debian/Ubuntu 系 (x64) |
-| <img src="https://img.icons8.com/color/24/linux--v1.png" width="20"/> **Linux (deb, arm64)** | [📥 下载 .deb](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.2.6-arm64.deb) | Debian/Ubuntu 系 (arm64) |
+| <img src="https://img.icons8.com/color/24/windows-10.png" width="20"/> **Windows** | [📥 下载 Setup.exe](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.3.6-Setup.exe) | 安装版，支持自定义安装目录 |
+| <img src="https://img.icons8.com/color/24/windows-10.png" width="20"/> **Windows (便携版)** | [📥 下载 Portable.exe](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.3.6-Portable.exe) | 免安装，即开即用 |
+| <img src="https://img.icons8.com/mac-os/24/mac-os.png" width="20"/> **macOS (Intel)** | [📥 下载 .dmg](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.3.6.dmg) | 适用于 Intel 芯片 Mac |
+| <img src="https://img.icons8.com/mac-os/24/mac-os.png" width="20"/> **macOS (Apple Silicon)** | [📥 下载 .dmg](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.3.6-arm64.dmg) | 适用于 M1/M2/M3/M4 芯片 Mac |
+| <img src="https://img.icons8.com/color/24/linux--v1.png" width="20"/> **Linux (AppImage, x64)** | [📥 下载 .AppImage](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.3.6-x64.AppImage) | 通用 Linux 格式 (x64) |
+| <img src="https://img.icons8.com/color/24/linux--v1.png" width="20"/> **Linux (AppImage, arm64)** | [📥 下载 .AppImage](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.3.6-arm64.AppImage) | 通用 Linux 格式 (arm64) |
+| <img src="https://img.icons8.com/color/24/linux--v1.png" width="20"/> **Linux (deb, x64)** | [📥 下载 .deb](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.3.6-amd64.deb) | Debian/Ubuntu 系 (x64) |
+| <img src="https://img.icons8.com/color/24/linux--v1.png" width="20"/> **Linux (deb, arm64)** | [📥 下载 .deb](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.3.6-arm64.deb) | Debian/Ubuntu 系 (arm64) |
 
 ### 📱 Mobile 版本
 
@@ -89,6 +89,20 @@ PatentHub 是一款基于 AI 大语言模型的桌面/移动应用程序，专�
 
 - Node.js (v20.x - v22.x)
 - pnpm (v10.x)
+
+### 可选：myOCR 本地离线 OCR 依赖
+
+> 若要使用 **PDF 转换 → myOCR**（OCRmyPDF 本地版，无需网络，数据完全离线）：
+> 运行 `scripts/check-ocrmypdf-env.ps1` 可一键检测依赖是否就绪。
+
+| 依赖 | 下载 | 安装命令 |
+|------|------|---------|
+| Python ≥ 3.11 | python.org | - |
+| OCRmyPDF ≥ 17 | - | `pip install ocrmypdf` |
+| Tesseract ≥ 5.0 | [UB-Mannheim/tesseract](https://github.com/UB-Mannheim/tesseract/wiki) | 安装时勾选语言包 |
+| Ghostscript ≥ 10 | [ghostscript.com](https://ghostscript.com/download/gsdn.html) | - |
+
+**提示**：若不安装上述依赖，PDF 转换 Tab 仍可使用 MinerU/MinerU-Office 云端服务商（需 API Key）。
 
 ### 安装依赖
 
@@ -122,6 +136,39 @@ pnpm run mobile:sync:android
 pnpm run mobile:android
 ```
 
+### 版本升级
+
+项目提供一键版本升级脚本 `scripts/bump-version.mjs`：
+
+```bash
+# 手动指定版本号
+node scripts/bump-version.mjs 1.2.9
+pnpm run version:bump 1.2.9
+
+# 自动递增（推荐）
+pnpm run version:patch    # 1.2.8 → 1.2.9
+pnpm run version:minor    # 1.2.8 → 1.3.0
+pnpm run version:major    # 1.2.8 → 2.0.0
+
+# 试运行（不修改文件）
+node scripts/bump-version.mjs 1.2.9 --dry-run
+
+# 升级 + 自动重新打包
+node scripts/bump-version.mjs 1.2.9 --build
+
+# 只跳过某些文件
+node scripts/bump-version.mjs 1.2.9 --skip-lockfile
+node scripts/bump-version.mjs 1.2.9 --skip-readme
+node scripts/bump-version.mjs 1.2.9 --skip-changelog
+```
+
+脚本会自动修改以下文件：
+- `package.json` / `release/app/package.json` / `release/app/package-lock.json`
+- `README.md`（badge、8 处下载链接、顶部更新日志）
+- 3 个 changelog 文件（`src/renderer/i18n/changelogs/changelog_*.ts`）
+
+脚本运行后还需要**手动编辑** README 和 changelog 中的 `TODO` 占位内容，写入真实变更说明。
+
 ## 项目结构
 
 ```
@@ -139,6 +186,54 @@ PatentHub/
 ```
 
 ## 更新日志
+
+### v1.3.6 (2026-07-04)
+
+- ✨ **新增 3 个国产大模型提供商**：Moonshot (Kimi)、MiniMax、智谱 (ChatGLM)
+- ✨ **更新 6 家模型提供商默认模型列表**
+  - OpenAI: gpt-5.5-pro, gpt-5.5, gpt-5.4, gpt-5.4-mini, gpt-5.4-nano, gpt-image-2
+  - Claude: claude-fable-5, claude-opus-4-8, claude-sonnet-5, claude-sonnet-latest
+  - Gemini: gemini-3.1-pro-preview, gemini-3.1-flash-lite-preview 等
+  - DeepSeek: 新增 deepseek-v4-pro, deepseek-v4-flash
+  - xAI: grok-4.3, grok-build-0.1, grok-imagine-image
+  - VolcEngine: doubao-seed-evolving, doubao-seed-2-1-pro, doubao-seed-2-1-turbo
+- ✨ **新增图像生成模型支持**：gpt-image-2, grok-imagine-image, nano-banana-pro-4k
+- ✨ **新增 Qwen (通义千问) 大模型提供商**
+- ✨ **新增 PDF OCR 功能**：myOCR 本地离线 OCR 服务（OCRmyPDF + Tesseract）
+- ✨ **新增 MinerU-Office 云端 PDF 解析服务商**
+- ✨ **新增 PDF Markdown 重建功能**
+- ✨ **新增 PDF HTML 直接渲染功能**
+- ✨ **新增 WPS 及旧版 Office 文档解析支持**：.doc/.wps/.xls/.et/.ppt/.dps
+- ✨ **新增 Android PDF 本地解析与渲染**
+- ✨ **新增图片生成功能**（DALL-E 3）
+- ✨ **新增审查搭档功能**：顶部工具栏快速切换预设审查模式
+- ✨ **新增百度搜索功能**
+- 🐛 **修复 PDF 导出失败回退 HTML 问题**
+- 🐛 **修复 HTML 转 PDF 空白问题**
+- 🐛 **修复 PDF 渲染问题**
+- 🐛 **修复 Electron 打包模块加载问题**
+- 🐛 **修复 Android 打包问题**
+- 🐛 **修复 Portable 版启动崩溃**
+
+### v1.3.0 (2026-06-22)
+
+- ✨ TODO: 填写本次版本变更说明（手动编辑）
+- 🐛 TODO: 列出 bug 修复条目
+
+### v1.2.8 (2026-06-19)
+
+- 🐛 **修复 Portable 版启动崩溃**
+  - 根因：打包后的 `main.js` 顶层直接 `require('cfb')` 失败（`Cannot find module 'cfb'`），导致应用启动瞬间崩溃
+  - 修复：`cfb` 与 `codepage` 改用 `requireUnpackedModule()` 多策略 fallback，并加入 `electron-builder.yml` 的 `asarUnpack` 列表
+- ✨ **.ppt 旧版二进制格式解析质量提升**
+  - 新增 Python + PowerPoint COM 自动转换 `.ppt → .pptx` 链路，文本完整度从约 52% 提升到 100%
+  - 新增 SheetJS js-ppt 库作为离线兜底方案（无需 Python 也能解析）
+- ✨ **新增旧版及 WPS 私有格式文档解析**
+  - `.doc` / `.wps` → word-extractor (OLE2)
+  - `.xls` / `.et` → xlsx (SheetJS)
+  - `.ppt` / `.dps` → cfb + js-ppt + Python 转换三层降级
+- ✨ **WPS 私有格式专属图标**
+  - `.wps` / `.et` / `.dps` 在文件列表中显示专属图标，不再回退到默认文本图标
 
 ### v1.2.6 (2026-06-11)
 

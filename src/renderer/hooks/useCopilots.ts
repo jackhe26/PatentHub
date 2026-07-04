@@ -13,6 +13,16 @@ const myCopilotsAtom = atomWithStorage<CopilotDetail[]>(StorageKey.MyCopilots, [
 // 所有专利搭档的ID都以该前缀开头
 const PATENT_COPILOT_ID_PREFIX = 'patent-copilot:'
 
+// 迁移老数据: 剥离 name 中遗留的 "数字+空格" 前缀(例如 "8 权利要求常规判断" → "权利要求常规判断")
+// 这样序号彻底从搭档名称中分离,只在 UI 层动态展示。
+const NUMBER_PREFIX_RE = /^\d+\s+/
+const migrateCopilotName = (copilot: CopilotDetail): CopilotDetail => {
+  if (typeof copilot.name === 'string' && NUMBER_PREFIX_RE.test(copilot.name)) {
+    return { ...copilot, name: copilot.name.replace(NUMBER_PREFIX_RE, '') }
+  }
+  return copilot
+}
+
 // 初始化默认专利搭子
 const initializePatentCopilots = async (currentCopilots: CopilotDetail[]): Promise<CopilotDetail[]> => {
   const patentCopilotIds = patentCopilots.map((p) => p.id)
@@ -20,13 +30,16 @@ const initializePatentCopilots = async (currentCopilots: CopilotDetail[]): Promi
   // 检查是否有任何专利搭子（通过前缀识别）
   const hasPatentCopilots = currentCopilots.some((c) => c.id.startsWith(PATENT_COPILOT_ID_PREFIX))
 
+  // 迁移老数据的 name
+  const migrated = currentCopilots.map(migrateCopilotName)
+
   if (!hasPatentCopilots) {
     // 首次初始化，添加所有专利搭子
-    return [...currentCopilots, ...patentCopilots]
+    return [...migrated, ...patentCopilots]
   }
 
   // 过滤掉所有旧的专利搭子（通过前缀），保留用户自定义的其他搭子
-  const nonPatentCopilots = currentCopilots.filter((c) => !c.id.startsWith(PATENT_COPILOT_ID_PREFIX))
+  const nonPatentCopilots = migrated.filter((c) => !c.id.startsWith(PATENT_COPILOT_ID_PREFIX))
   // 添加最新的专利搭子
   return [...nonPatentCopilots, ...patentCopilots]
 }

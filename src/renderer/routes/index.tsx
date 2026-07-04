@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { v4 as uuidv4 } from 'uuid'
 import { z } from 'zod'
+import { CopilotIndexBadge } from '@/components/common/CopilotIndexBadge'
 import { ScalableIcon } from '@/components/common/ScalableIcon'
 import InputBox, { type InputBoxPayload } from '@/components/InputBox/InputBox'
 import HomepageIcon from '@/components/icons/HomepageIcon'
@@ -372,13 +373,15 @@ const CopilotPicker = ({ selectedId, onSelect }: { selectedId?: string; onSelect
           )}
           <Flex wrap="nowrap" gap="xs">
             <Space w="xs" />
-            {copilots.map((copilot) =>
+            {copilots.map((copilot, idx) =>
               copilot ? (
                 <CopilotItem
                   key={copilot.id}
                   name={copilot.name}
                   picUrl={copilot.picUrl}
                   selected={selectedId === copilot.id}
+                  /** 仅本地审查搭子(mycCopilots 部分)才展示序号。 */
+                  index={idx < myCopilots.length ? idx + 1 : undefined}
                   onClick={() => {
                     onSelect?.(copilot)
                   }}
@@ -413,12 +416,15 @@ const CopilotItem = ({
   selected,
   onClick,
   noAvatar = false,
+  index,
 }: {
   name: string
   picUrl?: string
   selected?: boolean
   onClick?(): void
   noAvatar?: boolean
+  /** 序号(从 1 开始)。仅本地审查搭子会传递。 */
+  index?: number
 }) => {
   const isSmallScreen = useIsSmallScreen()
   return (
@@ -435,6 +441,9 @@ const CopilotItem = ({
       )}
       onClick={onClick}
     >
+      {index !== undefined && (
+        <CopilotIndexBadge index={index} size="xs" />
+      )}
       {!noAvatar && (
         <Avatar src={picUrl} color="chatbox-brand" size={isSmallScreen ? 20 : 24}>
           {name.slice(0, 1)}

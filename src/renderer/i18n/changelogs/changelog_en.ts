@@ -1,4 +1,31 @@
 const changelog = `
+## v1.3.6 - 2026.07.04
+1. Added 3 new domestic LLM providers: Moonshot (Kimi), MiniMax, Zhipu (ChatGLM)
+2. Updated default model lists for 6 providers (OpenAI, Claude, Gemini, DeepSeek, xAI, VolcEngine)
+3. Added image generation model support (gpt-image-2, grok-imagine-image, etc.)
+4. Added Qwen (Tongyi Qianwen) LLM provider
+5. Added PDF OCR feature (myOCR local offline OCR service)
+6. Added MinerU-Office cloud PDF parsing service provider
+7. Added PDF Markdown reconstruction feature
+8. Added PDF HTML direct rendering feature
+9. Added WPS and legacy Office document parsing support
+10. Added Android PDF local parsing and rendering
+11. Added image generation feature (DALL-E 3)
+12. Added Review Partner feature
+13. Added Baidu Search feature
+14. Fixed PDF export failure fallback to HTML issue
+15. Fixed HTML to PDF blank page issue
+16. Fixed PDF rendering issues
+17. Fixed Electron packaging module loading issue
+18. Fixed Android packaging issues
+19. Fixed Portable version startup crash
+
+## v1.2.8 - 2026.06.19
+1. Fixed Portable version startup crash with "Cannot find module 'cfb'" error
+2. Added parsing support for legacy Office and WPS private formats: .doc / .wps / .xls / .et / .ppt / .dps
+3. .ppt binary format now supports Python + PowerPoint COM auto-conversion to .pptx before parsing (text completeness boosted to 100%)
+4. Added dedicated file icons for WPS private formats (.wps / .et / .dps)
+
 ## v1.19.0
 1. New context management: automatic context compression, token usage percentage display, and context length error detection
 2. Default max context messages changed to unlimited

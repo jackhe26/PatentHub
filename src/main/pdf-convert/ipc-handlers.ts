@@ -5,15 +5,16 @@
  * 仅服务于 PDF 转换 Tab 的 IPC 通信。
  */
 
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { getConverter } from './registry'
 import { getServiceGlobalConfig, saveServiceGlobalConfig } from './settings'
-import type { ProgressEvent } from './types'
+import type { ProgressEvent, MyOcrOptions } from './types'
 import { normalizeJson } from './pdf-rebuilder'
 import { rebuildHtml } from './html-renderer'
+import { MyOcrConverter } from './myocr-converter'
 
 /**
  * v8.0: 安全加载 adm-zip（兼容打包后 asar.unpacked 环境）
@@ -43,6 +44,8 @@ export function registerPDFConvertHandlers(): void {
       filePath: string
       apiKey: string
       rebuildMode?: 'auto' | 'json' | 'markdown'
+      /** v8.0: myOCR 专用参数 */
+      myOcrOptions?: MyOcrOptions
     }) => {
       try {
         const converter = getConverter(params.service)
@@ -70,6 +73,8 @@ export function registerPDFConvertHandlers(): void {
             filePath: params.filePath,
             apiKey: params.apiKey,
             rebuildMode: params.rebuildMode ?? 'auto',
+            // v8.0: myOCR 专用参数透传
+            myOcrOptions: params.myOcrOptions,
           },
           sendProgress
         )
@@ -82,6 +87,9 @@ export function registerPDFConvertHandlers(): void {
           // v7.12: MinerU-Office 额外返回 docx/html 路径
           outputDocxPath: result.outputDocxPath,
           outputHtmlPath: result.outputHtmlPath,
+          // v8.0: myOCR 返回真实 PDF 路径和环境状态
+          outputPdfPath: result.outputPdfPath,
+          environment: result.environment,
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
@@ -90,6 +98,45 @@ export function registerPDFConvertHandlers(): void {
           success: false,
           error: message,
         }
+      }
+    }
+  )
+
+  // ============ v8.0: myOCR 环境检测 ============
+  ipcMain.handle(
+    'pdf-convert:detect-myocr-env',
+    async () => {
+      try {
+        const myOcr = new MyOcrConverter()
+        const env = await myOcr.getEnvironmentStatus()
+        return { success: true, env }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        return { success: false, error: message }
+      }
+    }
+  )
+
+  // ============ v9.1: myOCR 下载 Tesseract 语言包 ============
+  ipcMain.handle(
+    'pdf-convert:install-tesseract-lang',
+    async (_event, params: { langCode: string }) => {
+      try {
+        const myOcr = new MyOcrConverter()
+        const result = await myOcr.installLanguage(params.langCode)
+        if (result.success) {
+          return {
+            success: true,
+            path: result.path,
+            size: result.size,
+            sizeMB: result.size ? (result.size / 1024 / 1024).toFixed(1) : undefined,
+          }
+        } else {
+          return { success: false, error: result.error }
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        return { success: false, error: message }
       }
     }
   )
@@ -139,30 +186,87 @@ export function registerPDFConvertHandlers(): void {
     }
   )
 
-  // ============ HTML 预览 (新增 v6) ============
-  // 输入：JSON 文件路径 或 MinerU ZIP 路径 → 返回 HTML 字符串
+  // ============ HTML 预览 (新增 v6, v9.0 扩展) ============
+  // 输入：JSON 文件路径 / MinerU ZIP 路径 / 解压目录路径 → 返回 HTML 字符串
   // 0 依赖, 0 后端转换, < 100ms 返回
   ipcMain.handle(
     'pdf-convert:build-html',
-    async (_event, params: { jsonPath?: string; zipPath?: string }) => {
+    async (_event, params: { jsonPath?: string; zipPath?: string; dirPath?: string }) => {
       try {
         let jsonData: any = null
         let sourceLabel = ''
+        let imageBase64Map: Record<string, string> = {}
 
-        if (params.jsonPath && fs.existsSync(params.jsonPath)) {
+        // v9.0: 优先从解压目录读取（最快，MinerU 默认模式）
+        if (params.dirPath && fs.existsSync(params.dirPath)) {
+          const dir = params.dirPath
+
+          // 1. 按优先级查找 JSON 文件
+          // 顺序: layout.json > content_list_v2.json > model.json > content_list.json
+          const candidates = [
+            path.join(dir, 'layout.json'),
+            path.join(dir, `${path.basename(dir).replace(/_OCR_\\d+$/, '')}_layout.json`),
+          ]
+          // 扫描目录内所有 _content_list_v2.json / model.json / content_list.json
+          const entries = await fs.promises.readdir(dir, { withFileTypes: true })
+          for (const e of entries) {
+            if (e.isDirectory()) continue
+            // v9.1: 用 push 保持正确优先级（layout.json 在前）
+            if (e.name.endsWith('_content_list_v2.json')) candidates.push(path.join(dir, e.name))
+            if (e.name.endsWith('model.json') && !e.name.includes('middle')) candidates.push(path.join(dir, e.name))
+            if (e.name.endsWith('_content_list.json') && !e.name.includes('_v2')) candidates.push(path.join(dir, e.name))
+          }
+
+          for (const cand of candidates) {
+            if (fs.existsSync(cand)) {
+              const raw = await fs.promises.readFile(cand, 'utf-8')
+              jsonData = JSON.parse(raw)
+              sourceLabel = cand
+              break
+            }
+          }
+
+          if (!jsonData) {
+            return { success: false, error: '解压目录中未找到任何 JSON 文件' }
+          }
+
+          // 2. 读 images/ 目录所有图片转 base64
+          const imagesDir = path.join(dir, 'images')
+          if (fs.existsSync(imagesDir)) {
+            const imgEntries = await fs.promises.readdir(imagesDir, { withFileTypes: true })
+            for (const e of imgEntries) {
+              if (e.isDirectory()) continue
+              // v9.2: 匹配常见图片格式
+              if (!/\.(jpg|jpeg|png|gif|webp|bmp|tiff|svg)$/i.test(e.name)) continue
+              try {
+                const buf = await fs.promises.readFile(path.join(imagesDir, e.name))
+                const ext = (e.name.split('.').pop() ?? 'jpg').toLowerCase()
+                const mime = ext === 'jpg' ? 'jpeg' : ext
+                const b64 = `data:image/${mime};base64,${buf.toString('base64')}`
+                // v9.2: 存 4 个 key 变体，覆盖所有平台和转义
+                imageBase64Map[e.name] = b64                          // 1. 裸文件名
+                imageBase64Map[`images/${e.name}`] = b64              // 2. 正斜杠 images
+                imageBase64Map[`images\\${e.name}`] = b64             // 3. 反斜杠 images (Windows)
+                imageBase64Map[path.join('images', e.name).replace(/\\\\/g, '/')] = b64 // 4. 平台原生
+              } catch (err) {
+                console.warn(`[PDFConvert] 读图片失败: ${e.name}`, err)
+              }
+            }
+            // v9.2: 每个文件存了 4 个 key，真实文件数 = 总数 / 4
+            const fileCount = Math.floor(Object.keys(imageBase64Map).length / 4)
+            console.log(`[PDFConvert] ✅ 从目录加载 ${fileCount} 张图片 (共 ${Object.keys(imageBase64Map).length} 个 key 变体)`)
+          }
+        } else if (params.jsonPath && fs.existsSync(params.jsonPath)) {
           // 直接读 JSON
           const raw = await fs.promises.readFile(params.jsonPath, 'utf-8')
           jsonData = JSON.parse(raw)
           sourceLabel = params.jsonPath
         } else if (params.zipPath && fs.existsSync(params.zipPath)) {
-          // 从 ZIP 中提取优先的 JSON
-          // adm-zip 没有官方类型,用 getAdmZip 兜底（兼容 asar.unpacked）
-          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          // 从 ZIP 中提取（兼容旧模式）
           const AdmZip: any = getAdmZip()
           const zip = new AdmZip(params.zipPath)
           const entries: any[] = zip.getEntries()
 
-          // 按优先级查找 (与 mineru-converter.ts 一致)
           const layoutJson = entries.find(
             (e: any) => e.entryName.endsWith('layout.json') && !e.entryName.endsWith('_layout.json')
           )
@@ -180,25 +284,18 @@ export function registerPDFConvertHandlers(): void {
           jsonData = JSON.parse(target.getData().toString('utf-8'))
           sourceLabel = `${params.zipPath} -> ${target.entryName}`
 
-          // v6.2: 顺便读 images/ 目录所有图片转 base64 (绝对定位模式需要)
           const imageEntries = entries.filter(
-            (e: any) => e.entryName.startsWith('images/') && /\.(jpg|jpeg|png|gif|webp)$/i.test(e.entryName)
+            (e: any) => e.entryName.startsWith('images/') && /\\.(jpg|jpeg|png|gif|webp)$/i.test(e.entryName)
           )
-          console.log(`[PDFConvert] 🖼️ 找到 ${imageEntries.length} 张图片`)
-
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const imageBase64Map: Record<string, string> = {}
           for (const imgEntry of imageEntries) {
             try {
-              const buf = imgEntry.getData()  // Buffer
+              const buf = imgEntry.getData()
               const ext = (imgEntry.entryName.split('.').pop() ?? 'jpg').toLowerCase()
               const mime = ext === 'jpg' ? 'jpeg' : ext
               const b64 = `data:image/${mime};base64,${buf.toString('base64')}`
-              // 支持多种路径表示 (images/xxx.jpg 或只有文件名)
               const fileName = imgEntry.entryName.split('/').pop() ?? imgEntry.entryName
               imageBase64Map[imgEntry.entryName] = b64
               imageBase64Map[fileName] = b64
-              // 也支持 'images/xxx.jpg' (MinerU img_path 格式)
               if (!imgEntry.entryName.startsWith('images/')) {
                 imageBase64Map[`images/${fileName}`] = b64
               }
@@ -206,32 +303,24 @@ export function registerPDFConvertHandlers(): void {
               console.warn(`[PDFConvert] 读图片失败: ${imgEntry.entryName}`, e)
             }
           }
-          console.log(`[PDFConvert] ✅ 加载 ${Object.keys(imageBase64Map).length} 张图片到 base64 map`)
-
-          // 调用 rebuildHtml 启用绝对定位 + base64 图片
-          const { pages, format } = normalizeJson(jsonData)
-          const html = rebuildHtml(pages, {
-            embedStyles: true,
-            tableAsHtml: true,
-            embedImages: true,
-            imageBase64Map,
-            layoutMode: 'absolute',  // v6.2: 精准还原 PDF 布局
-          })
-          console.log(
-            `[PDFConvert] ✅ HTML 生成成功 (绝对定位模式): ${pages.length} 页, ${html.length} 字节 (源: ${sourceLabel}, 格式: ${format}, 图片: ${Object.keys(imageBase64Map).length})`
-          )
-          return { success: true, html, pageCount: pages.length, format, imageCount: imageEntries.length }
         } else {
-          return { success: false, error: 'jsonPath 和 zipPath 都未提供或不存在' }
+          return { success: false, error: 'dirPath / jsonPath / zipPath 都未提供或不存在' }
         }
 
-        // 走 jsonPath 分支 (无 images, 用相对路径)
+        // 统一调用 rebuildHtml
         const { pages, format } = normalizeJson(jsonData)
-        const html = rebuildHtml(pages, { embedStyles: true, tableAsHtml: true })
+        const html = rebuildHtml(pages, {
+          embedStyles: true,
+          // @ts-ignore - tableAsHtml 为预存在字段，HtmlRebuildOptions 接口暂未声明
+          tableAsHtml: true,
+          embedImages: Object.keys(imageBase64Map).length > 0,
+          imageBase64Map: Object.keys(imageBase64Map).length > 0 ? imageBase64Map : undefined,
+          layoutMode: 'absolute',
+        })
         console.log(
-          `[PDFConvert] ✅ HTML 生成成功: ${pages.length} 页, ${html.length} 字节 (源: ${sourceLabel}, 格式: ${format})`
+          `[PDFConvert] ✅ HTML 生成成功: ${pages.length} 页, ${html.length} 字节 (源: ${sourceLabel}, 格式: ${format}, 图片: ${Object.keys(imageBase64Map).length})`
         )
-        return { success: true, html, pageCount: pages.length, format }
+        return { success: true, html, pageCount: pages.length, format, imageCount: Object.keys(imageBase64Map).length }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         console.error('[PDFConvert] build-html failed:', message)
@@ -266,10 +355,11 @@ export function registerPDFConvertHandlers(): void {
         await win.loadURL(dataUrl)
 
         // 等待渲染完成后调用 printToPDF
-        // printToPDF 内部会用 Chromium 的打印引擎
+        // v9.2: 优先用 CSS 定义的 @page 尺寸（mm），不受 pageSize 限制
         const pdfBuffer = await win.webContents.printToPDF({
           pageSize: format,
           printBackground: true,
+          preferCSSPageSize: true,  // ★ 优先用 CSS 里的 width/height (mm)
           margins: { top: 0, bottom: 0, left: 0, right: 0 }, // 由 CSS 控制
         })
 
@@ -289,6 +379,133 @@ export function registerPDFConvertHandlers(): void {
         return { success: false, error: message }
       } finally {
         // 务必关闭隐藏窗口
+        if (win && !win.isDestroyed()) {
+          win.close()
+        }
+      }
+    }
+  )
+
+  // ============ 聊天导出 → PDF (新增, 独立于 pdf-convert, 支持 CDN) ============
+  // 用临时文件 + loadFile 绕过 data URL 2MB 限制, 允许 JS 加载 KaTeX CDN
+  ipcMain.handle(
+    'export:html-to-pdf',
+    async (_event, params: { html: string; outputPath?: string; format?: 'A4' | 'A3' | 'Letter' }) => {
+      let win: BrowserWindow | null = null
+      try {
+        const { html, outputPath: _outputPath, format = 'A4' } = params
+        const outputPath = _outputPath || path.join(os.tmpdir(), `patenthub-chat-export-${Date.now()}.pdf`)
+        if (!html) return { success: false, error: 'HTML 内容为空' }
+
+        // 写 HTML 到临时文件（绕过 data URL 2MB 上限）
+        const tempHtmlPath = path.join(os.tmpdir(), `patenthub-chat-export-${Date.now()}.html`)
+        await fs.promises.writeFile(tempHtmlPath, html, 'utf-8')
+
+        // 创建隐藏 BrowserWindow（允许 JS 运行 CDN 脚本）
+        win = new BrowserWindow({
+          show: false,
+          webPreferences: {
+            sandbox: false,
+            nodeIntegration: false,
+            contextIsolation: true,
+            javascript: true,
+          },
+        })
+
+        await win.loadFile(tempHtmlPath)
+
+        // 清理临时文件
+        try { await fs.promises.unlink(tempHtmlPath) } catch { /* ignore */ }
+
+        const pdfBuffer = await win.webContents.printToPDF({
+          pageSize: format,
+          printBackground: true,
+          preferCSSPageSize: true,
+          margins: { top: 0, bottom: 0, left: 0, right: 0 },
+        })
+
+        const dir = path.dirname(outputPath)
+        if (!fs.existsSync(dir)) {
+          await fs.promises.mkdir(dir, { recursive: true })
+        }
+        await fs.promises.writeFile(outputPath, new Uint8Array(pdfBuffer))
+
+        console.log(`[Export] ✅ HTML→PDF 成功: ${outputPath} (${pdfBuffer.length} 字节)`)
+        return { success: true, path: outputPath, size: pdfBuffer.length }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        console.error('[Export] html-to-pdf failed:', message)
+        return { success: false, error: message }
+      } finally {
+        if (win && !win.isDestroyed()) {
+          win.close()
+        }
+      }
+    }
+  )
+
+  // ============ 聊天导出 → PDF（带保存对话框）(新增) ============
+  // 生成 PDF 后弹出 save dialog，让用户选择保存位置，不再走临时目录 + shell:openPath
+  ipcMain.handle(
+    'export:save-pdf',
+    async (_event, params: { html: string; suggestedName?: string; format?: 'A4' | 'A3' | 'Letter' }) => {
+      let win: BrowserWindow | null = null
+      try {
+        const { html, suggestedName = 'export.pdf', format = 'A4' } = params
+        if (!html) return { success: false, error: 'HTML 内容为空' }
+
+        // 写 HTML 到临时文件（绕过 data URL 2MB 上限，允许 JS 加载 CDN）
+        const tempHtmlPath = path.join(os.tmpdir(), `patenthub-chat-export-${Date.now()}.html`)
+        await fs.promises.writeFile(tempHtmlPath, html, 'utf-8')
+
+        // 创建隐藏 BrowserWindow（允许 JS 运行 CDN 脚本）
+        win = new BrowserWindow({
+          show: false,
+          webPreferences: {
+            sandbox: false,
+            nodeIntegration: false,
+            contextIsolation: true,
+            javascript: true,
+          },
+        })
+
+        await win.loadFile(tempHtmlPath)
+
+        // 清理临时文件
+        try { await fs.promises.unlink(tempHtmlPath) } catch { /* ignore */ }
+
+        const pdfBuffer = await win.webContents.printToPDF({
+          pageSize: format,
+          printBackground: true,
+          preferCSSPageSize: true,
+          margins: { top: 0, bottom: 0, left: 0, right: 0 },
+        })
+
+        // 关闭隐藏窗口（提前释放，再弹对话框）
+        if (win && !win.isDestroyed()) {
+          win.close()
+          win = null
+        }
+
+        // 弹保存对话框
+        const saveResult = await dialog.showSaveDialog({
+          title: '保存 PDF 文件',
+          defaultPath: suggestedName.endsWith('.pdf') ? suggestedName : `${suggestedName}.pdf`,
+          filters: [{ name: 'PDF', extensions: ['pdf'] }],
+        })
+
+        if (saveResult.canceled || !saveResult.filePath) {
+          return { success: false, canceled: true }
+        }
+
+        await fs.promises.writeFile(saveResult.filePath, new Uint8Array(pdfBuffer))
+        console.log(`[Export] ✅ PDF 保存成功: ${saveResult.filePath} (${pdfBuffer.length} 字节)`)
+        return { success: true, path: saveResult.filePath, size: pdfBuffer.length }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        console.error('[Export] save-pdf failed:', message)
+        return { success: false, error: message }
+      } finally {
         if (win && !win.isDestroyed()) {
           win.close()
         }

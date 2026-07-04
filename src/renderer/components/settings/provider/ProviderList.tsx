@@ -8,6 +8,7 @@ import clsx from 'clsx'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import CustomProviderIcon from '@/components/CustomProviderIcon'
+import ProviderIcon from '@/components/icons/ProviderIcon'
 import Divider from '@/components/common/Divider'
 import { ScalableIcon } from '@/components/common/ScalableIcon'
 import { useProviders } from '@/hooks/useProviders'
@@ -87,7 +88,11 @@ export function ProviderList({ providers, onAddProvider, onImportProvider, isImp
                     <CustomProviderIcon providerId={provider.id} providerName={provider.name} size={32} />
                   )
                 ) : (
-                  <Image w={32} h={32} src={icons.find((icon) => icon.name === provider.id)?.src} alt={provider.name} />
+                  icons.find((icon) => icon.name === provider.id)?.src ? (
+                    <Image w={32} h={32} src={icons.find((icon) => icon.name === provider.id)?.src} alt={provider.name} />
+                  ) : (
+                    <ProviderIcon provider={provider.id} size={32} />
+                  )
                 )}
 
                 <Text

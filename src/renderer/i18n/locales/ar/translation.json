@@ -147,7 +147,7 @@
   "Chatbox Guide": "دليل Chatbox",
   "Chatbox is ready. To save resources, please start a new chat to continue.": "Chatbox جاهز. لتوفير الموارد، يرجى بدء دردشة جديدة للمتابعة.",
   "Chatbox OCRs images with this model and sends the text to models without image support.": "يقوم Chatbox بإجراء التعرف الضوئي على الصور (OCR) باستخدام هذا النموذج، ثم يرسل النص إلى النماذج التي لا تدعم الصور.",
-  "Chatbox respects your privacy and only uploads anonymous error data and events when necessary. You can change your preferences at any time in the settings.": "يحترم Chatbox خصوصيتك ولا يقوم بتحميل بيانات الأخطاء والأحداث المجهولة إلا عند الضرورة. يمكنك تغيير تفضيلاتك في أي وقت في الإعدادات.",
+  "Chatbox respects your privacy and only uploads anonymous error data and events when necessary. You can change your preferences at any time in the settings.": "يحترم PatentHub خصوصيتك ولا يقوم بتحميل بيانات الأخطاء والأحداث المجهولة إلا عند الضرورة. يمكنك تغيير تفضيلاتك في أي وقت في الإعدادات.",
   "Chatbox Search is a paid feature with advanced capabilities and better performance.": "بحث Chatbox ميزة مدفوعة بقدرات متقدمة وأداء أفضل.",
   "Chatbox will automatically use this model to construct search term.": "سيقوم Chatbox تلقائيًا باستخدام هذا النموذج لبناء مصطلح البحث.",
   "Chatbox will automatically use this model to rename threads.": "سيقوم Chatbox تلقائيًا باستخدام هذا النموذج لإعادة تسمية الموضوعات.",

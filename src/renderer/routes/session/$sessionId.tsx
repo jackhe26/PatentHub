@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useStore } from 'zustand'
 import MessageList, { type MessageListRef } from '@/components/chat/MessageList'
+import { CopilotIndexBadge } from '@/components/common/CopilotIndexBadge'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import InputBox from '@/components/InputBox/InputBox'
 import Header from '@/components/layout/Header'
@@ -84,11 +85,39 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
   const filePath = pdfFile.url
   const isMobile = platform.type === 'mobile'
 
-  // Desktop: load via file:// or IndexedDB blob
+  // Desktop/Web: load via file://, IndexedDB blob, or _pdf_raw (for web)
   useEffect(() => {
     if (isMobile) return
     let url: string | null = null
     const loadPdf = async () => {
+      // Web: load from _pdf_raw stored in IndexedDB
+      if (platform.type === 'web') {
+        try {
+          if (!storageKey) {
+            setError('No storage key available')
+            setLoading(false)
+            return
+          }
+          const rawBase64 = await storage.getBlob(`${storageKey}_pdf_raw`)
+          if (rawBase64) {
+            const cleanBase64 = rawBase64.includes(',') ? rawBase64.split(',')[1] : rawBase64
+            const bytes = safeBase64Decode(cleanBase64)
+            const blob = new Blob([bytes], { type: 'application/pdf' })
+            url = URL.createObjectURL(blob)
+            setBlobUrl(url)
+            setLoading(false)
+            return
+          }
+          setError('PDF preview data not found. Please re-upload the PDF file.')
+          setLoading(false)
+        } catch (err) {
+          console.error('[PDF Preview] Web load error:', err)
+          setError(err instanceof Error ? err.message : 'Failed to load PDF')
+          setLoading(false)
+        }
+        return
+      }
+      // Desktop: load via file://
       if (filePath) {
         try {
           const fileUrl = `file:///${filePath.replace(/\\/g, '/')}`
@@ -673,7 +702,20 @@ function RouteComponent() {
     <Menu shadow="lg" width={240} position="bottom-start">
       <Menu.Target>
         <Button variant="light" color="gray" size="sm" radius="md" className="font-semibold controls">
-          {selectedCopilot ? selectedCopilot.name : t('选择搭档')}
+          {selectedCopilot ? (
+            <Group gap={6} wrap="nowrap" align="center">
+              <CopilotIndexBadge
+                index={Math.max(
+                  0,
+                  myCopilots.findIndex((c) => c.id === selectedCopilot.id)
+                ) + 1}
+                size="xs"
+              />
+              <span>{selectedCopilot.name}</span>
+            </Group>
+          ) : (
+            t('选择搭档')
+          )}
         </Button>
       </Menu.Target>
       <Menu.Dropdown>
@@ -686,7 +728,10 @@ function RouteComponent() {
             color={copilot.id === selectedCopilotId ? 'blue' : undefined}
             style={{ marginTop: index === 0 ? 8 : 0 }}
           >
-            {copilot.name}
+            <Group gap={6} wrap="nowrap" align="center">
+              <CopilotIndexBadge index={index + 1} size="xs" />
+              <Text size="sm">{copilot.name}</Text>
+            </Group>
           </Menu.Item>
         ))}
         {remoteCopilots.length > 0 && <Menu.Divider />}

@@ -13,7 +13,7 @@ import type { DocumentParserConfig } from '@shared/types/settings'
 import { getMessageText, migrateMessage } from '@shared/utils/message'
 import { pick } from 'lodash'
 import i18n from '@/i18n'
-import { formatChatAsHtml, formatChatAsMarkdown, formatChatAsTxt } from '@/lib/format-chat'
+import { formatChatAsHtml, formatChatAsMarkdown, formatChatAsPdf, formatChatAsTxt } from '@/lib/format-chat'
 import { getLogger } from '@/lib/utils'
 import { PREVIEW_LINES } from '@/packages/context-management/attachment-payload'
 import * as localParser from '@/packages/local-parser'
@@ -274,9 +274,9 @@ export async function preprocessFile(
 
         case 'local': {
           // Local parsing - only available on desktop
-          // On mobile, use pdf.js for PDF files
-          // Check if this is a PDF file and we're on mobile
-          if (platform.type === 'mobile' && file.name.toLowerCase().endsWith('.pdf') && platform.parsePdfWithPdfJs) {
+          // On mobile/web, use pdf.js for PDF files
+          // Check if this is a PDF file and we're on mobile or web
+          if ((platform.type === 'mobile' || platform.type === 'web') && file.name.toLowerCase().endsWith('.pdf') && platform.parsePdfWithPdfJs) {
             // Mobile PDF parsing using pdf.js
             try {
               // Store raw PDF bytes in IndexedDB for native rendering (PdfRenderer.openWithBase64)
@@ -599,6 +599,11 @@ export function constructUserMessage(
   return msg
 }
 
+/** 剥离 session.name 中残留的文件扩展名（如 .PDF / .pdf），避免导出文件名混淆 */
+function stripExtension(name: string): string {
+  return name.replace(/\.(pdf|PDF|doc|docx|DOCX|txt|TXT|md|MD|html|HTML)$/, '')
+}
+
 export async function exportChat(session: Session, scope: ExportChatScope, format: ExportChatFormat) {
   const threads: SessionThread[] = scope === 'all_threads' ? [...(session.threads || [])] : []
   threads.push({
@@ -608,15 +613,52 @@ export async function exportChat(session: Session, scope: ExportChatScope, forma
     createdAt: Date.now(),
   })
 
+  const cleanName = stripExtension(session.name)
+
   if (format === 'Markdown') {
     const content = formatChatAsMarkdown(session.name, threads)
-    platform.exporter.exportTextFile(`${session.name}.md`, content)
+    platform.exporter.exportTextFile(`${cleanName}.md`, content)
   } else if (format === 'TXT') {
     const content = formatChatAsTxt(session.name, threads)
-    platform.exporter.exportTextFile(`${session.name}.txt`, content)
+    platform.exporter.exportTextFile(`${cleanName}.txt`, content)
   } else if (format === 'HTML') {
     const content = await formatChatAsHtml(session.name, threads)
-    platform.exporter.exportTextFile(`${session.name}.html`, content)
+    platform.exporter.exportTextFile(`${cleanName}.html`, content)
+  } else if (format === 'PDF') {
+    // Desktop: 使用 Electron BrowserWindow.printToPDF（Chromium 引擎，不传 outputPath 由主进程自动生成）
+    const html = await formatChatAsPdf(session.name, threads)
+    if (platform.type === 'desktop' && typeof window !== 'undefined' && (window as any).electronAPI) {
+      try {
+        // 使用独立 IPC 通道 export:html-to-pdf（不影响 pdf-convert 原有功能）
+        // 不传 outputPath，由主进程自动生成到临时目录
+        const res = await (window as any).electronAPI.invoke('export:save-pdf', {
+          html,
+          suggestedName: `${cleanName}-chat`,
+          format: 'A4',
+        })
+        if (res?.success) return
+        if (res?.canceled) return
+        throw new Error(res?.error || 'PDF 导出失败')
+      } catch (e) {
+        console.error('[ExportChat] PDF 导出失败，回退 HTML:', e)
+        platform.exporter.exportTextFile(`${cleanName}.html`, html)
+      }
+    } else {
+      // 非桌面端: 保存为 HTML
+      platform.exporter.exportTextFile(`${cleanName}.html`, html)
+    }
+  } else if (format === 'DOCX') {
+    // 生成 Word 兼容的 HTML（内联样式，MS Word / WPS 可直接打开编辑）
+    const html = await formatChatAsPdf(session.name, threads)
+    const docHtml = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:w="urn:schemas-microsoft-com:office:word"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8"><meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
+<style>@page { size: A4; margin: 2cm; }</style></head>
+<body>${html}</body></html>`
+    const blob = new Blob(['\ufeff' + docHtml], { type: 'application/msword' })
+    platform.exporter.exportBlob(`${cleanName}-chat.doc`, blob)
   }
 }
 

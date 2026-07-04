@@ -24,6 +24,7 @@ import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { v4 as uuidv4 } from 'uuid'
 import { ConfirmDeleteMenuItem } from '@/components/common/ConfirmDeleteButton'
+import { CopilotIndexBadge } from '@/components/common/CopilotIndexBadge'
 import Page from '@/components/layout/Page'
 import { ScalableIcon } from '@/components/common/ScalableIcon'
 import StyledMenu from '@/components/StyledMenu'
@@ -152,6 +153,7 @@ function Copilots() {
                     key={`${item.id}_${ix}`}
                     mode="local"
                     detail={item}
+                    index={ix + 1}
                     selectMe={() => selectCopilot(item)}
                     switchStarred={() => {
                       store.addOrUpdate({
@@ -201,6 +203,8 @@ type MiniItemProps =
   | {
       mode: 'local'
       detail: CopilotDetail
+      /** 序号(从 1 开始)。仅本地搭子会传递,仅在展示模式下渲染。 */
+      index?: number
       selectMe(): void
       switchStarred(): void
       editMe(): void
@@ -264,6 +268,11 @@ function MiniItem(props: MiniItemProps) {
       }}
       onClick={selectCopilot}
     >
+      {props.mode === 'local' && props.index !== undefined && (
+        <Box sx={{ marginRight: '8px', flexShrink: 0 }}>
+          <CopilotIndexBadge index={props.index} size="sm" />
+        </Box>
+      )}
       {avatarEmoji ? (
         <Box
           sx={{

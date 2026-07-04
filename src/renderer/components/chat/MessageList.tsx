@@ -47,7 +47,7 @@ import { getAllMessageList, getCurrentThreadHistoryHash } from '@/stores/session
 import { settingsStore } from '@/stores/settingsStore'
 import { useUIStore } from '@/stores/uiStore'
 import ActionMenu from '../ActionMenu'
-
+import { ChatContextMenu } from './ChatContextMenu'
 import { ErrorBoundary } from '../common/ErrorBoundary'
 import { ScalableIcon } from '../common/ScalableIcon'
 import { BlockCodeCollapsedStateProvider } from '../Markdown'
@@ -267,7 +267,8 @@ const MessageList = forwardRef<MessageListRef, MessageListProps>((props, ref) =>
   return (
     <div className={cn('w-full h-full mx-auto', props.className)}>
       <BlockCodeCollapsedStateProvider defaultCollapsed={!!settingsStore.getState().autoCollapseCodeBlock}>
-        <div className="overflow-hidden h-full pr-0 pl-1 sm:pl-0 relative" ref={messageListRef}>
+        <ChatContextMenu session={currentSession}>
+          <div className="overflow-hidden h-full pr-0 pl-1 sm:pl-0 relative" ref={messageListRef}>
           <Virtuoso
             style={{ scrollbarGutter: 'stable' }}
             className={platformType === 'win32' ? 'scrollbar-custom' : ''}
@@ -388,7 +389,8 @@ const MessageList = forwardRef<MessageListRef, MessageListProps>((props, ref) =>
               </Transition>
             </>
           )}
-        </div>
+          </div>
+        </ChatContextMenu>
       </BlockCodeCollapsedStateProvider>
     </div>
   )

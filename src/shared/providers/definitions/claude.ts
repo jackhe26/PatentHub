@@ -14,19 +14,31 @@ export const claudeProvider = defineProvider({
     // https://docs.anthropic.com/en/docs/about-claude/models/overview
     models: [
       {
-        modelId: 'claude-opus-4-1',
-        contextWindow: 200_000,
-        maxOutput: 32_000,
-        capabilities: ['vision', 'reasoning', 'tool_use'],
-      },
-      {
-        modelId: 'claude-sonnet-4-5',
-        contextWindow: 200_000,
+        modelId: 'claude-fable-5',
+        contextWindow: 1_000_000,
         maxOutput: 64_000,
         capabilities: ['vision', 'reasoning', 'tool_use'],
       },
       {
-        modelId: 'claude-haiku-4-5',
+        modelId: 'claude-opus-4-8',
+        contextWindow: 1_000_000,
+        maxOutput: 64_000,
+        capabilities: ['vision', 'reasoning', 'tool_use'],
+      },
+      {
+        modelId: 'claude-sonnet-5',
+        contextWindow: 1_000_000,
+        maxOutput: 64_000,
+        capabilities: ['vision', 'reasoning', 'tool_use'],
+      },
+      {
+        modelId: 'claude-sonnet-latest',
+        contextWindow: 1_000_000,
+        maxOutput: 64_000,
+        capabilities: ['vision', 'reasoning', 'tool_use'],
+      },
+      {
+        modelId: 'claude-haiku-latest',
         capabilities: ['vision', 'tool_use', 'reasoning'],
         contextWindow: 200_000,
         maxOutput: 64_000,

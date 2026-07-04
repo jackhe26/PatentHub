@@ -18,11 +18,11 @@ const log = getLogger('settings-store')
 /**
  * Returns platform-specific default document parser configuration.
  * - Desktop: 'local' (has full Node.js environment for local parsing)
- * - Mobile/Web: 'none' (only basic text file support by default, user can enable chatbox-ai)
+ * - Mobile/Web: 'local' (uses pdf.js for PDF parsing in browser)
  */
 export function getPlatformDefaultDocumentParser(): DocumentParserConfig {
-  // Desktop and Mobile both support local parsing; Web still needs cloud service
-  return platform.type === 'web' ? { type: 'none' } : { type: 'local' }
+  // All platforms now support local parsing via pdf.js (mobile/web) or pdf-parse (desktop)
+  return { type: 'local' }
 }
 
 type Action = {

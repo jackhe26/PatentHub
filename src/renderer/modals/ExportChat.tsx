@@ -12,7 +12,7 @@ import { exportSessionChat } from '@/stores/sessionActions'
 const ExportChat = NiceModal.create(() => {
   const modal = useModal()
   const { t } = useTranslation()
-  const [scope, setScope] = useState<ExportChatScope>('all_threads')
+  const [scope, setScope] = useState<ExportChatScope>('current_thread')
   const [format, setFormat] = useState<ExportChatFormat>('HTML')
 
   const currentSessionId = useAtomValue(currentSessionIdAtom)
@@ -59,7 +59,7 @@ const ExportChat = NiceModal.create(() => {
         <AdaptiveSelect
           label={t('Format')}
           classNames={{ dropdown: 'pointer-events-auto' }}
-          data={['Markdown', 'TXT', 'HTML']}
+          data={['Markdown', 'TXT', 'HTML', 'PDF', 'DOCX']}
           value={format}
           onChange={(e) => e && setFormat(e as ExportChatFormat)}
         />

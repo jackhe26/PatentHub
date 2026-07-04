@@ -15,6 +15,10 @@ export const aiProviderNameHash: Record<ModelProviderEnum, string> = {
   [ModelProviderEnum.Ollama]: 'Ollama API',
   [ModelProviderEnum.Groq]: 'Groq API',
   [ModelProviderEnum.DeepSeek]: 'DeepSeek API',
+  [ModelProviderEnum.Moonshot]: 'Moonshot API',
+  [ModelProviderEnum.Minimax]: 'MiniMax API',
+  [ModelProviderEnum.Zhipu]: 'Zhipu API',
+  [ModelProviderEnum.Qwen]: 'Qwen API',
   [ModelProviderEnum.SiliconFlow]: 'SiliconFlow API',
   [ModelProviderEnum.VolcEngine]: 'VolcEngine API',
   [ModelProviderEnum.MistralAI]: 'MistralAI',
@@ -65,6 +69,26 @@ export const AIModelProviderMenuOptionList = [
   {
     value: ModelProviderEnum.DeepSeek,
     label: aiProviderNameHash[ModelProviderEnum.DeepSeek],
+    disabled: false,
+  },
+  {
+    value: ModelProviderEnum.Moonshot,
+    label: aiProviderNameHash[ModelProviderEnum.Moonshot],
+    disabled: false,
+  },
+  {
+    value: ModelProviderEnum.Minimax,
+    label: aiProviderNameHash[ModelProviderEnum.Minimax],
+    disabled: false,
+  },
+  {
+    value: ModelProviderEnum.Zhipu,
+    label: aiProviderNameHash[ModelProviderEnum.Zhipu],
+    disabled: false,
+  },
+  {
+    value: ModelProviderEnum.Qwen,
+    label: aiProviderNameHash[ModelProviderEnum.Qwen],
     disabled: false,
   },
   {

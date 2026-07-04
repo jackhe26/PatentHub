@@ -8,6 +8,9 @@ asarUnpack:
   - "**/node_modules/pdf-parse/**"
   - "**/node_modules/pdfjs-dist/**"
   - "**/node_modules/officeparser/**"
+  - "**/node_modules/cfb/**"
+  - "**/node_modules/codepage/**"
+  - "**/node_modules/adm-zip/**"
 files:
   - "dist"
   - "node_modules"
@@ -85,9 +88,20 @@ extraResources:
     to: resources/babeldoc
     filter:
       - "**/*"
+  - from: resources/myocr
+    to: resources/myocr
+    filter:
+      - "**/*"
+      - "!.venv/**"
+      - "!__pycache__/**"
+      - "!*.pyc"
   - from: assets
     to: assets
     filter:
       - "**/*"
+  - from: scripts/ppt2pptx.py
+    to: scripts/ppt2pptx.py
+  - from: src/main/ppt-parser.js
+    to: parsers/ppt-parser.js
 
 publish: null

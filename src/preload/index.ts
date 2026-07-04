@@ -3,28 +3,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { ElectronIPC } from 'src/shared/electron-types'
 
-// export type Channels = 'ipc-example';
-
 const electronHandler: ElectronIPC = {
-  // ipcRenderer: {
-  //     sendMessage(channel: Channels, ...args: unknown[]) {
-  //         ipcRenderer.send(channel, ...args);
-  //     },
-  //     on(channel: Channels, func: (...args: unknown[]) => void) {
-  //         const subscription = (
-  //             _event: IpcRendererEvent,
-  //             ...args: unknown[]
-  //         ) => func(...args);
-  //         ipcRenderer.on(channel, subscription);
-
-  //         return () => {
-  //             ipcRenderer.removeListener(channel, subscription);
-  //         };
-  //     },
-  //     once(channel: Channels, func: (...args: unknown[]) => void) {
-  //         ipcRenderer.once(channel, (_event, ...args) => func(...args));
-  //     },
-  // },
   invoke: ipcRenderer.invoke,
   onSystemThemeChange: (callback: () => void) => {
     ipcRenderer.on('system-theme-updated', callback)
@@ -73,6 +52,62 @@ const electronHandler: ElectronIPC = {
       return () => ipcRenderer.off('pdf:progress', listener)
     },
   },
+
+  // ========== PDF 格式转换（OCR）新增接口 ==========
+  /**
+   * 调用 PDF 转换服务（当前支持 MinerU / myOCR），将扫描/图片型 PDF 转为可搜索 PDF。
+   * v8.0: 新增 myOCR (OCRmyPDF 本地版)，不需要 API Key，但需要 myOcrOptions
+   */
+  convertPDF: (params: {
+    service: string
+    filePath: string
+    apiKey: string
+    rebuildMode?: 'auto' | 'json' | 'markdown'
+    /** v8.0: myOCR 专用参数 */
+    myOcrOptions?: {
+      languages?: string[]
+      deskew?: boolean
+      rotatePages?: boolean
+      outputType?: 'pdf' | 'pdfa' | 'pdfa-1' | 'pdfa-2'
+      jobs?: number
+      binaryPath?: string
+      tesseractPath?: string
+    }
+  }) => ipcRenderer.invoke('pdf-convert:convert', params),
+
+  /**
+   * v8.0: 检测 myOCR 本地环境状态（ocrmypdf / tesseract / ghostscript）
+   */
+  detectMyOcrEnv: () => ipcRenderer.invoke('pdf-convert:detect-myocr-env'),
+
+  /**
+   * 监听 PDF 转换进度事件。
+   */
+  onPDFConvertProgress: (callback: (data: { progress: number; message: string; currentPage?: number; totalPages?: number }) => void) => {
+    const listener = (_event: any, data: { progress: number; message: string; currentPage?: number; totalPages?: number }) => {
+      callback(data)
+    }
+    ipcRenderer.on('pdf-convert:progress', listener)
+    return () => ipcRenderer.off('pdf-convert:progress', listener)
+  },
+
+  /**
+   * 测试服务商连接（验证 API Key）。
+   */
+  testPDFConnection: (params: { service: string; apiKey: string }) =>
+    ipcRenderer.invoke('pdf-convert:test-connection', params),
+
+  /**
+   * 读取全局 PDF 转换配置（如 API Key）。
+   */
+  getPDFConvertGlobalConfig: (service: string) =>
+    ipcRenderer.invoke('pdf-convert:get-global-config', service),
+
+  /**
+   * 保存全局 PDF 转换配置。
+   */
+  savePDFConvertGlobalConfig: (params: { service: string; config: { apiKey?: string } }) =>
+    ipcRenderer.invoke('pdf-convert:save-global-config', params),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronHandler)

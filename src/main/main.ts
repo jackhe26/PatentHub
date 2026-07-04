@@ -88,6 +88,7 @@ import {
 } from './store-node'
 import * as windowState from './window_state'
 import { registerIPCHandlers as registerPdfTranslateIPCHandlers } from './pdf-translate/index.js'
+import { registerPDFConvertHandlers } from './pdf-convert/ipc-handlers.js'
 
 const knowledgeBaseInitPromise = import('./knowledge-base/index.js')
   .then((mod) => mod.getInitPromise())
@@ -530,6 +531,7 @@ if (!gotTheLock) {
       registerShortcuts()
       proxy.init()
       registerPdfTranslateIPCHandlers()
+      registerPDFConvertHandlers()
       app.on('will-quit', () => {
         try {
           unregisterShortcuts()

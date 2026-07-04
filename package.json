@@ -1,7 +1,7 @@
 {
   "name": "patent-hub",
   "productName": "PatentHub",
-  "version": "1.2.6",
+  "version": "1.3.6",
   "engines": {
     "node": ">=20.0.0 <23.0.0",
     "pnpm": ">=10.0.0"
@@ -35,7 +35,7 @@
     "start:main": "cross-env NODE_ENV=development electronmon -r ts-node/register/transpile-only .",
     "start:preload": "electron-vite build --preload --watch",
     "start:renderer": "electron-vite",
-    "serve:web": "npx serve ./release/app/dist/renderer",
+    "serve:web": "npx serve ./release/app/dist/renderer -l tcp://0.0.0.0:1212",
     "test": "vitest run",
     "test:ui": "vitest --ui",
     "test:watch": "vitest",
@@ -56,7 +56,11 @@
     "mobile:android": "pnpm run mobile:sync:android && npx cap open android",
     "mobile:assets": "npx capacitor-assets generate --ios --android",
     "prepare": "node -e \"try { require('husky') } catch(e) { process.exit(0) }\" && husky || true",
-    "translate": "i18next && node script/translate.mjs"
+    "translate": "i18next && node script/translate.mjs",
+    "version:bump": "node scripts/bump-version.mjs",
+    "version:patch": "node scripts/bump-version.mjs patch",
+    "version:minor": "node scripts/bump-version.mjs minor",
+    "version:major": "node scripts/bump-version.mjs major"
   },
   "repository": {
     "type": "git",
@@ -290,9 +294,12 @@
     "@mastra/rag": "^1.0.8",
     "@modelcontextprotocol/sdk": "^1.15.1",
     "@mozilla/readability": "^0.5.0",
+    "@pdf-lib/fontkit": "^1.1.1",
     "@sentry/node": "^9.28.1",
     "auto-launch": "^5.0.6",
+    "cfb": "^1.2.2",
     "chardet": "^2.1.0",
+    "codepage": "^1.15.0",
     "cohere-ai": "^7.17.1",
     "electron-debug": "^3.2.0",
     "electron-devtools-installer": "^3.2.0",
@@ -302,14 +309,19 @@
     "epub": "^1.3.0",
     "es-toolkit": "^1.43.0",
     "fs-extra": "^11.1.1",
+    "icns": "^0.1.0",
     "iconv-lite": "^0.6.3",
     "linkedom": "^0.18.5",
     "lodash": "^4.17.21",
     "ofetch": "^1.0.1",
     "officeparser": "5.0.0",
+    "pdf-lib": "^1.17.1",
     "pdf-parse": "^2.4.5",
+    "pptx-parser": "1.1.7-beta.9",
     "sanitize-filename": "^1.6.3",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.0",
+    "word-extractor": "^1.0.4",
+    "xlsx": "^0.18.5"
   },
   "browserslist": [],
   "electronmon": {

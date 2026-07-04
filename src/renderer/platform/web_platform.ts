@@ -159,6 +159,163 @@ export default class WebPlatform extends IndexedDBStorage implements Platform {
     return { key, isSupported: true }
   }
 
+  /**
+   * 使用 pdfjs-dist 在 Web 端解析 PDF 文件
+   * 
+   * 方案：通过动态脚本注入加载 pdf.js（静态资源，绕过 Vite 打包）
+   * 原因：Vite 对 pdfjs-dist ESM 模块的二次打包会破坏 GlobalWorkerOptions，
+   *       导致 workerSrc 赋值无效，pdf.js 内部抛出 "NO 'GlobalWorkerOptions.workerSrc' specified."
+   * 
+   * @param file PDF 文件对象
+   * @returns 解析结果
+   */
+  async parsePdfWithPdfJs(file: File): Promise<{ content: string; error?: string; textParts?: string[]; textBlocks?: any[][] }> {
+    console.log('[WebPlatform] Starting PDF parsing, file:', file.name, 'size:', file.size)
+    
+    try {
+      // 步骤1：动态加载 pdf.js bridge（静态资源，不被 Vite 处理）
+      console.log('[WebPlatform] Loading pdf.js via script injection...')
+      let pdfjsLib = (window as any).pdfjsLib
+      
+      if (!pdfjsLib) {
+        await new Promise<void>((resolve, reject) => {
+          const script = document.createElement('script')
+          script.type = 'module'
+          script.src = '/pdfjs/pdf-bridge.mjs'
+          script.onload = () => {
+            console.log('[WebPlatform] pdf.js bridge loaded')
+            pdfjsLib = (window as any).pdfjsLib
+            resolve()
+          }
+          script.onerror = (e) => {
+            console.error('[WebPlatform] Failed to load pdf.js bridge:', e)
+            reject(new Error('PDF解析库加载失败'))
+          }
+          document.head.appendChild(script)
+        })
+      }
+
+      // 检查 pdfjsLib 是否正确加载
+      if (!pdfjsLib || !pdfjsLib.getDocument) {
+        console.error('[WebPlatform] pdfjs-dist not loaded, pdfjsLib:', typeof pdfjsLib)
+        return { content: '', error: 'PDF解析库加载失败，请尝试使用云解析' }
+      }
+      console.log('[WebPlatform] pdfjsLib ready, workerSrc:', pdfjsLib.GlobalWorkerOptions?.workerSrc)
+
+      // 步骤2：将 File 对象转为 ArrayBuffer
+      console.log('[WebPlatform] Converting file to ArrayBuffer...')
+      let arrayBuffer: ArrayBuffer
+      
+      try {
+        arrayBuffer = await file.arrayBuffer()
+        console.log('[WebPlatform] ArrayBuffer created, length:', arrayBuffer.byteLength)
+      } catch (arrayBufferError) {
+        console.error('[WebPlatform] ArrayBuffer error:', arrayBufferError)
+        return { content: '', error: `文件读取失败: ${arrayBufferError instanceof Error ? arrayBufferError.message : '未知错误'}` }
+      }
+
+      // 检查 ArrayBuffer 是否有效
+      if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+        return { content: '', error: 'PDF文件为空或读取失败' }
+      }
+
+      // 步骤3：加载 PDF 文档
+      console.log('[WebPlatform] Loading PDF document...')
+      let pdf: any
+      try {
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer })
+        pdf = await loadingTask.promise
+        console.log('[WebPlatform] PDF loaded, pages:', pdf.numPages)
+      } catch (pdfLoadError) {
+        console.error('[WebPlatform] PDF load error:', pdfLoadError)
+        return { content: '', error: `PDF文件格式错误: ${pdfLoadError instanceof Error ? pdfLoadError.message : '无法加载PDF文件'}` }
+      }
+
+      // 提取每一页的文本和带坐标的文本块
+      const textParts: string[] = []  // 每页整页文本（用于 textarea 显示）
+      const textBlocks: any[][] = []  // 每页的带坐标文本块（用于 Y 坐标定位 + setSelectionRange）
+
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        console.log('[WebPlatform] Processing page:', pageNum)
+        const page = await pdf.getPage(pageNum)
+        const textContent = await page.getTextContent()
+
+        // 获取页面尺寸用于计算 X 坐标归一化
+        const viewport = await page.getViewport({ scale: 1 })
+        const pageWidth = viewport.width || 612  // 默认 A4 宽度
+        const pageHeight = viewport.height || 792  // 默认 A4 高度
+
+        // 提取带坐标的文本块（用于长按时定位段落）
+        const pageBlocks: any[] = []
+        for (const item of textContent.items) {
+          if (item.str && item.str.trim()) {
+            // transform[4] = X 坐标, transform[5] = Y 坐标（PDF 原点在左下角）
+            // transform[0] = 水平缩放, transform[3] = 垂直缩放（字号相关）
+            const transform = item.transform || []
+            const xPdf = transform[4] || 0
+            const yPdf = transform[5] || 0
+            const fontSize = Math.abs(transform[3] || transform[0] || 12)  // 从 transform 矩阵推算字号
+            pageBlocks.push({
+              text: item.str,
+              hasEOL: item.hasEOL || false,  // 行尾标记
+              xPdf: xPdf,  // 原始 X 坐标
+              yPdf: yPdf,  // 原始 Y 坐标
+              fontSize: fontSize,  // 推算字号（pt）
+              xRatio: xPdf / pageWidth,  // 归一化 X 坐标，0=左边，1=右边
+              yRatio: yPdf  // 归一化 Y 坐标，0=顶部，1=底部（后续会计算）
+            })
+          }
+        }
+
+        // 按原始 Y 坐标从大到小排序（大 Y = PDF 顶部 = 阅读顺序第一），然后归一化
+        if (pageBlocks.length > 0) {
+          pageBlocks.sort((a, b) => b.yPdf - a.yPdf)  // 大 Y 在前（小 Y 在后）= 从上到下阅读顺序
+          // 修复：用页面实际高度归一化（0=页面顶部，1=页面底部），与触摸坐标的容器高度比例完全对齐
+          for (const block of pageBlocks) {
+            block.yRatio = 1 - (block.yPdf / pageHeight)
+          }
+        }
+        textBlocks.push(pageBlocks)
+
+        // 合并文本项，计算 charOffset（用于 setSelectionRange）
+        // 重新按 Y 坐标排序后的顺序拼接，确保 charOffset 与文本顺序一致
+        const sortedItems = [...textContent.items].filter(item => item.str && item.str.trim())
+        let charOffset = 0
+        for (const block of pageBlocks) {
+          block.charOffset = charOffset
+          charOffset += block.text.length + 1  // +1 是空格分隔符
+        }
+
+        const pageText = pageBlocks.map(b => b.text).join(' ').replace(/\s+/g, ' ').trim()
+        textParts.push(pageText)
+      }
+
+      const fullText = textParts.join('\n\n')
+      console.log('[WebPlatform] Extracted text length:', fullText.length)
+
+      if (!fullText || fullText.length === 0) {
+        return { content: '', error: 'PDF文本提取失败：PDF可能是扫描版或图片格式，请尝试使用云解析' }
+      }
+
+      // Return both fullText and textParts (per-page full text for textarea display)
+      // Also return textBlocks with charOffset and hasEOL for Y-coordinate based paragraph location
+      return { content: fullText, textParts, textBlocks }
+    } catch (error) {
+      console.error('[WebPlatform] PDF parsing error:', error)
+      const errorMessage = error instanceof Error ? error.message : '未知错误'
+      
+      // 根据错误类型返回友好的错误信息
+      if (errorMessage.includes('Worker') || errorMessage.includes('worker')) {
+        return { content: '', error: 'PDF解析Worker加载失败，请尝试使用云解析' }
+      }
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('network')) {
+        return { content: '', error: '网络连接失败，请检查网络后重试' }
+      }
+      
+      return { content: '', error: `PDF解析失败: ${errorMessage}` }
+    }
+  }
+
   public async parseUrl(url: string): Promise<{ key: string; title: string }> {
     throw new Error('Not implemented')
   }
