@@ -38,4 +38,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ inputs.tag }}" release-files/**/*.dmg --clobber --repo "${{ github.repository }}"
+          set -euo pipefail
+          while IFS= read -r -d '' f; do
+            echo "uploading $f"
+            gh release upload "${{ inputs.tag }}" "$f" --clobber --repo "${{ github.repository }}"
+          done < <(find release-files -type f -name '*.dmg' -print0)
