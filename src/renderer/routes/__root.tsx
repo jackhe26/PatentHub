@@ -51,6 +51,9 @@ import SearchDialog from '@/pages/SearchDialog'
 import platform from '@/platform'
 import { router } from '@/router'
 import Sidebar from '@/Sidebar'
+import AgentsPage from '@/agents/pages/AgentsPage'
+import AgentChatPage from '@/agents/pages/AgentChatPage'
+import SkillsMarketPage from '@/skills/pages/SkillsMarketPage'
 import * as atoms from '@/stores/atoms'
 import * as premiumActions from '@/stores/premiumActions'
 import * as settingActions from '@/stores/settingActions'
@@ -59,6 +62,10 @@ import { useUIStore } from '@/stores/uiStore'
 
 function Root() {
   const location = useLocation()
+  const isAgentsPage = location.pathname === '/agents'
+  const isSkillsPage = location.pathname === '/skills-market'
+  const agentChatMatch = location.pathname.match(/^\/agent-chat\/([^\/]+)$/)
+  const agentChatId = agentChatMatch ? agentChatMatch[1] : null
   const spellCheck = useSettingsStore((state) => state.spellCheck)
   const language = useLanguage()
   const initialized = useRef(false)
@@ -170,7 +177,15 @@ function Root() {
           }}
         >
           <ErrorBoundary name="main">
-            <Outlet />
+            {isAgentsPage ? (
+              <AgentsPage />
+            ) : isSkillsPage ? (
+              <SkillsMarketPage />
+            ) : agentChatId ? (
+              <AgentChatPage agentIdOverride={agentChatId} />
+            ) : (
+              <Outlet />
+            )}
           </ErrorBoundary>
         </Box>
       </Grid>

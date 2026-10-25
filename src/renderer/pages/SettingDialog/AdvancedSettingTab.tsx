@@ -22,6 +22,7 @@ import platform from '@/platform'
 import storage, { StorageKey } from '@/storage'
 import { migrateOnData } from '@/stores/migration'
 import { settingsStore, useSettingsStore } from '@/stores/settingsStore'
+import { AUTO_UPDATE_ENABLED } from '@/variables'
 
 interface Props {
   settingsEdit: Settings
@@ -108,7 +109,7 @@ export default function AdvancedSettingTab(props: Props) {
           </FormGroup>
         </Box>
       )}
-      {platform.type === 'desktop' && (
+      {platform.type === 'desktop' && AUTO_UPDATE_ENABLED && (
         <Box className="mt-2">
           <FormGroup>
             <FormControlLabel

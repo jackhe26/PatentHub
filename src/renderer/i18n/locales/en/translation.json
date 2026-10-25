@@ -839,5 +839,11 @@
   "Your HTML content has been published. You can access it via the link below.": "Your HTML content has been published. You can access it via the link below.",
   "Your license has expired.": "Your license has expired.",
   "Your license has expired. You can continue using your quota pack.": "Your license has expired. You can continue using your quota pack.",
-  "Your rating on the App Store would help make Chatbox even better!": "Your rating on the App Store would help make Chatbox even better!"
+  "Your rating on the App Store would help make Chatbox even better!": "Your rating on the App Store would help make Chatbox even better!",
+  "Copilot": "Copilot",
+  "No matching copilot": "No matching copilot",
+  "Remove Copilot": "Remove Copilot",
+  "Change Copilot": "Change Copilot",
+  "Pin Copilot": "Keep for this entire session",
+  "Unpin Copilot": "Only apply to next message"
 }

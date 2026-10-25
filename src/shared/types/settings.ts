@@ -370,7 +370,7 @@ export const SettingsSchema = GlobalSessionSettingsSchema.extend({
   compactionThreshold: z.number().min(0.4).max(0.9).default(0.6),
 
   autoLaunch: z.boolean().default(false),
-  autoUpdate: z.boolean().default(true), // 是否自动检查更新
+  autoUpdate: z.boolean().default(false), // 是否自动检查更新（仅当构建时配置了 PATENTHUB_UPDATE_URL 才生效）
   betaUpdate: z.boolean().default(false), // 是否自动检查 beta 更新
 
   shortcuts: ShortcutSettingSchema,

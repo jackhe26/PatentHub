@@ -87,7 +87,7 @@ function getEffectiveDocumentParserConfig(): DocumentParserConfig {
 async function parseFileWithLocalParser(
   file: File,
   uniqKey: string
-): Promise<{ content: string; storageKey: string; tokenCountMap: Record<string, number> }> {
+): Promise<{ content: string; storageKey: string; tokenCountMap: Record<string, number>; tempPath?: string }> {
   const result = await platform.parseFileLocally(file)
 
   if (!result.isSupported || !result.key) {
@@ -116,7 +116,7 @@ async function parseFileWithLocalParser(
     await storage.setItem(`${uniqKey}_tokenMap`, tokenCountMap)
   }
 
-  return { content, storageKey: uniqKey, tokenCountMap }
+  return { content, storageKey: uniqKey, tokenCountMap, tempPath: result.tempPath }
 }
 
 /**
@@ -213,7 +213,7 @@ export async function preprocessFile(
   error?: string
 }> {
   // Get file path from Electron's File object (if available)
-  const filePath = (file as any).path
+  let filePath: string | undefined = (file as any).path
 
   try {
     const uniqKey = StorageKeyGenerator.fileUniqKey(file)
@@ -236,11 +236,16 @@ export async function preprocessFile(
 
       await storage.setItem(`${uniqKey}_tokenMap`, tokenCountMap)
 
+      // 拖拽文件无真实路径时，为 PDF 预览写临时文件并返回路径
+      let effectiveFilePath = filePath
+      if (!effectiveFilePath && platform.type !== 'mobile') {
+        effectiveFilePath = (await platform.writeFileForPreview?.(file)) || undefined
+      }
       return {
         file,
         content: existingContent,
         storageKey: uniqKey,
-        filePath, // 关键：即使缓存也要返回 filePath
+        filePath: effectiveFilePath, // 拖拽时为临时路径供 PDF 预览
         tokenCountMap,
         lineCount,
         byteLength,
@@ -251,7 +256,7 @@ export async function preprocessFile(
     const parserConfig = getEffectiveDocumentParserConfig()
     log.debug(`Using document parser: ${parserConfig.type} for file: ${file.name}`)
 
-    let result: { content: string; storageKey: string; tokenCountMap: Record<string, number> }
+    let result: { content: string; storageKey: string; tokenCountMap: Record<string, number>; tempPath?: string }
 
     // Text files always use local parsing for efficiency (same as Knowledge Base behavior)
     // This applies to all platforms (desktop/web/mobile)
@@ -386,7 +391,7 @@ export async function preprocessFile(
       file,
       content: result.content,
       storageKey: result.storageKey,
-      filePath, // 包含 filePath
+      filePath: filePath || result.tempPath, // 包含 filePath（拖拽文件用临时路径供 PDF 预览）
       tokenCountMap,
       lineCount,
       byteLength,

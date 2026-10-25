@@ -45,12 +45,13 @@ const DOMMatrixPolyfill = class DOMMatrix {
 ;(global as any).DOMMatrix = DOMMatrixPolyfill
 ;(globalThis as any).DOMMatrix = DOMMatrixPolyfill
 
-import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeTheme, session, shell, Tray } from 'electron'
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeTheme, session, shell, Tray } from 'electron'
 import electronDebug from 'electron-debug'
 import log from 'electron-log/main'
 import { autoUpdater } from 'electron-updater'
 import os from 'os'
 import path from 'path'
+import fs from 'fs'
 
 // ========== Portable版本用户数据目录配置 ==========
 // 修复Portable版本PDF预览显示异常问题
@@ -72,7 +73,7 @@ import * as analystic from './analystic-node'
 import * as autoLauncher from './autoLauncher'
 import { handleDeepLink } from './deeplinks'
 import { parseFile } from './file-parser'
-import { AppUpdater } from './app-updater'
+import { AppUpdater, isAutoUpdateEnabled } from './app-updater'
 import Locale from './locales'
 import * as mcpIpc from './mcp/ipc-stdio-transport'
 import MenuBuilder from './menu'
@@ -89,6 +90,9 @@ import {
 import * as windowState from './window_state'
 import { registerIPCHandlers as registerPdfTranslateIPCHandlers } from './pdf-translate/index.js'
 import { registerPDFConvertHandlers } from './pdf-convert/ipc-handlers.js'
+import { initializeSkillsModule } from './skills'
+import { initializeAgentsModule } from './agents'
+import { abortAllRunningAgents, getRunningAgentSessions } from './agents/AgentExecutor'
 
 const knowledgeBaseInitPromise = import('./knowledge-base/index.js')
   .then((mod) => mod.getInitPromise())
@@ -127,6 +131,8 @@ console.log(`📱 URL Scheme registered: ${PROTOCOL_SCHEME}://`)
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
+/** 是否已经下载完更新包（未下载完成时忽略 install-update，防止误触发安装） */
+let appUpdateDownloaded = false
 
 // --------- 快捷键 ---------
 
@@ -292,6 +298,68 @@ if (isDebug) {
 
 // --------- 窗口管理 ---------
 
+// --------- Agent 任务运行中时的关窗/退出保护 ---------
+
+/** 用户已确认「停止任务并退出」，此时放行关闭与退出 */
+let forceQuitConfirmed = false
+/** 防止确认弹窗被重复弹出（关窗 + before-quit 可能同时触发） */
+let closeGuardDialogOpen = false
+
+/**
+ * Agent 任务运行中时的关窗/退出二次确认弹窗
+ *
+ * 行为：
+ * - 「继续等待（不关闭）」：默认选项，取消本次关闭，等任务跑完再关
+ * - 「最小化到托盘（后台继续运行）」：隐藏窗口，任务继续在后台执行，可从托盘重新打开
+ * - 「停止任务并退出」：中止所有正在运行的 Agent 任务，然后退出应用
+ */
+async function confirmCloseWhileAgentRunning(): Promise<void> {
+  if (closeGuardDialogOpen) {
+    return
+  }
+  closeGuardDialogOpen = true
+  try {
+    const runningSessions = getRunningAgentSessions()
+    const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
+    const options: Electron.MessageBoxOptions = {
+      type: 'warning',
+      noLink: true,
+      title: 'Agent 任务正在运行',
+      message:
+        runningSessions.length > 1
+          ? `当前有 ${runningSessions.length} 个 Agent 任务正在执行`
+          : '当前有 Agent 任务正在执行',
+      detail:
+        '现在关闭会中断正在执行的任务（可能正在读写文件或执行命令）。\n\n' +
+        '建议等待任务执行完毕后再关闭窗口。',
+      buttons: ['继续等待（不关闭）', '最小化到托盘（后台继续运行）', '停止任务并退出'],
+      defaultId: 0,
+      cancelId: 0,
+    }
+
+    const { response } = win ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options)
+
+    if (response === 1) {
+      // 隐藏到托盘：窗口消失但应用与任务继续运行
+      win?.hide()
+      log.info('close-guard: window hidden to tray, agent tasks keep running')
+    } else if (response === 2) {
+      const aborted = abortAllRunningAgents()
+      log.warn('close-guard: user chose to stop agent tasks and exit:', aborted.join(', '))
+      forceQuitConfirmed = true
+      closeGuardDialogOpen = false
+      app.quit()
+      return
+    } else {
+      log.info('close-guard: close cancelled by user, agent tasks keep running')
+    }
+  } catch (e) {
+    log.error('close-guard: failed to show confirm dialog', e)
+  } finally {
+    closeGuardDialogOpen = false
+  }
+}
+
 async function createWindow() {
   if (isDebug) {
     // 不在安装 DEBUG 浏览器插件。可能不兼容，所以不如直接在网页里debug
@@ -350,9 +418,16 @@ async function createWindow() {
   })
 
   // 窗口关闭时保存窗口大小与位置
-  mainWindow.on('close', () => {
+  mainWindow.on('close', (event) => {
     if (mainWindow) {
       windowState.saveState(mainWindow)
+    }
+
+    // Agent 任务运行中时，阻止直接关闭窗口，先弹窗提醒
+    // （用户可选择：继续等待 / 最小化到托盘继续运行 / 停止任务并退出）
+    if (!forceQuitConfirmed && getRunningAgentSessions().length > 0) {
+      event.preventDefault()
+      void confirmCloseWhileAgentRunning()
     }
   })
 
@@ -484,12 +559,16 @@ if (!gotTheLock) {
   app
     .whenReady()
     .then(async () => {
+      await cleanupTempUploads()
       await knowledgeBaseInitPromise
       await createWindow()
       ensureTray()
       // Remove this if your app does not use auto updates
       // eslint-disable-next-line
-      new AppUpdater(() => mainWindow?.webContents.send('update-downloaded', {}))
+      new AppUpdater(() => {
+        appUpdateDownloaded = true
+        mainWindow?.webContents.send('update-downloaded', {})
+      })
 
       // 处理启动时的 Deep Link (Windows/Linux)
       // macOS 会通过 open-url 事件处理，不需要在这里处理
@@ -532,6 +611,11 @@ if (!gotTheLock) {
       proxy.init()
       registerPdfTranslateIPCHandlers()
       registerPDFConvertHandlers()
+      
+      // Initialize Skills & Agents modules
+      await initializeSkillsModule()
+      initializeAgentsModule()
+      
       app.on('will-quit', () => {
         try {
           unregisterShortcuts()
@@ -541,7 +625,13 @@ if (!gotTheLock) {
         mcpIpc.closeAllTransports()
         destroyTray()
       })
-      app.on('before-quit', () => {
+      app.on('before-quit', (event) => {
+        // Agent 任务运行中时，阻止直接退出应用（托盘 Exit / Cmd+Q / 重启），先弹窗提醒
+        if (!forceQuitConfirmed && getRunningAgentSessions().length > 0) {
+          event.preventDefault()
+          void confirmCloseWhileAgentRunning()
+          return
+        }
         destroyTray()
       })
     })
@@ -795,6 +885,70 @@ ipcMain.handle('parseFileLocally', async (event, dataJSON: string) => {
   }
 })
 
+
+// 处理拖拽上传文件（无 file.path）：写临时文件后复用本地解析。返回 tempPath 供 PDF 预览使用。
+ipcMain.handle('parseFileByContent', async (_event, payload: { name: string; content: ArrayBuffer | Uint8Array }) => {
+  const tempDir = path.join(os.tmpdir(), 'chatbox-uploads')
+  try {
+    await fs.promises.mkdir(tempDir, { recursive: true })
+    // 保留原扩展名，让 parseFile 走对应的解析分支（PDF/Office/Epub 等）
+    const safeName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${path.basename(payload.name)}`
+    const tempPath = path.join(tempDir, safeName)
+    const buffer = payload.content instanceof Uint8Array
+      ? payload.content
+      : new Uint8Array(payload.content)
+    await fs.promises.writeFile(tempPath, buffer)
+    const data = await parseFile(tempPath)
+    return JSON.stringify({ text: data, isSupported: true, tempPath })
+  } catch (err: any) {
+    log.error('[parseFileByContent] failed:', err)
+    return JSON.stringify({
+      text: '',
+      isSupported: false,
+      error: err?.message || '文件解析失败',
+      rawError: err?.stack,
+    })
+  }
+})
+
+
+// 仅为 PDF 预览写临时文件（供已缓存文件/拖拽场景使用，不做重新解析），返回 tempPath
+ipcMain.handle('writeFileForPreview', async (_event, payload: { name: string; content: ArrayBuffer | Uint8Array }) => {
+  const tempDir = path.join(os.tmpdir(), 'chatbox-uploads')
+  try {
+    await fs.promises.mkdir(tempDir, { recursive: true })
+    const safeName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${path.basename(payload.name)}`
+    const tempPath = path.join(tempDir, safeName)
+    const buffer = payload.content instanceof Uint8Array
+      ? payload.content
+      : new Uint8Array(payload.content)
+    await fs.promises.writeFile(tempPath, buffer)
+    return JSON.stringify({ tempPath })
+  } catch (err: any) {
+    log.error('[writeFileForPreview] failed:', err)
+    return JSON.stringify({ tempPath: '' })
+  }
+})
+// 启动时清理超过 24 小时的临时上传文件，避免拖拽文件累积占用磁盘
+async function cleanupTempUploads() {
+  const tempDir = path.join(os.tmpdir(), 'chatbox-uploads')
+  try {
+    if (!fs.existsSync(tempDir)) return
+    const files = await fs.promises.readdir(tempDir)
+    const now = Date.now()
+    await Promise.all(
+      files.map(async (f) => {
+        const fp = path.join(tempDir, f)
+        const st = await fs.promises.stat(fp)
+        if (now - st.mtimeMs > 24 * 60 * 60 * 1000) {
+          await fs.promises.unlink(fp).catch(() => {})
+        }
+      })
+    )
+  } catch (err) {
+    log.warn('cleanupTempUploads failed:', err)
+  }
+}
 ipcMain.handle('parseUrl', async (event, url: string) => {
   // const result = await readability(url, { maxLength: 1000 })
   // const key = 'parseUrl-' + uuidv4()
@@ -823,6 +977,11 @@ ipcMain.handle('setFullscreen', (event, enable: boolean) => {
 })
 
 ipcMain.handle('install-update', () => {
+  // 未配置自家更新源、或尚未下载完更新包时，直接忽略
+  // （历史上更新源指向 Chatbox，误点会触发 Chatbox 的安装包）
+  if (!isAutoUpdateEnabled || !appUpdateDownloaded) {
+    return
+  }
   autoUpdater.quitAndInstall()
 })
 

@@ -37,6 +37,134 @@ const electronHandler: ElectronIPC = {
     ipcRenderer.on('navigate-to', listener)
     return () => ipcRenderer.off('navigate-to', listener)
   },
+
+  // ========== Skills ==========
+  skills: {
+    list: () => ipcRenderer.invoke('skills:list'),
+    getById: (id: string) => ipcRenderer.invoke('skills:getById', id),
+    install: (source: string) => ipcRenderer.invoke('skills:install', source),
+    installFromZip: (zipPath: string) => ipcRenderer.invoke('skills:installFromZip', zipPath),
+    installFromDirectory: (dirPath: string) => ipcRenderer.invoke('skills:installFromDirectory', dirPath),
+    uninstall: (id: string) => ipcRenderer.invoke('skills:uninstall', id),
+    search: (query: string) => ipcRenderer.invoke('skills:search', query),
+    readFile: (skillId: string, filename: string) => ipcRenderer.invoke('skills:readFile', skillId, filename),
+    listFiles: (skillId: string) => ipcRenderer.invoke('skills:listFiles', skillId),
+  },
+
+  // ========== Agents ==========
+  agents: {
+    list: () => ipcRenderer.invoke('agents:list'),
+    getById: (id: string) => ipcRenderer.invoke('agents:getById', id),
+    create: (data: any) => ipcRenderer.invoke('agents:create', data),
+    update: (id: string, data: any) => ipcRenderer.invoke('agents:update', id, data),
+    delete: (id: string) => ipcRenderer.invoke('agents:delete', id),
+    getSkills: (agentId: string) => ipcRenderer.invoke('agents:getSkills', agentId),
+    toggleSkill: (agentId: string, skillId: string, isEnabled: boolean) =>
+      ipcRenderer.invoke('agents:toggleSkill', agentId, skillId, isEnabled),
+
+    // v2 扩展
+    detectGitBash: () => ipcRenderer.invoke('agents:detectGitBash'),
+    selectGitBashPath: () => ipcRenderer.invoke('agents:selectGitBashPath'),
+    selectDir: () => ipcRenderer.invoke('agents:selectDir'),
+    setAutoApproveTools: (agentId: string, toolNames: string[]) =>
+      ipcRenderer.invoke('agents:setAutoApproveTools', agentId, toolNames),
+    getAutoApproveTools: (agentId: string) =>
+      ipcRenderer.invoke('agents:getAutoApproveTools', agentId),
+
+    // 权限询问响应
+    respondPermission: (eventId: string, decision: 'allow' | 'deny', alwaysAllow?: boolean) =>
+      ipcRenderer.invoke('agents:respondPermission', eventId, decision, alwaysAllow),
+
+    // 附件落盘（Agent 通用文件上传）
+    addAttachments: (params: { agentId: string; sessionId: string; files: Array<{ name: string; path?: string; bytes?: Uint8Array }> }) =>
+      ipcRenderer.invoke('agents:addAttachments', params),
+    listAttachments: (params: { agentId: string; sessionId: string }) =>
+      ipcRenderer.invoke('agents:listAttachments', params),
+    cleanupAttachments: (params: { agentId: string; sessionId: string }) =>
+      ipcRenderer.invoke('agents:cleanupAttachments', params),
+
+    // Agent 运行控制
+    runAgent: (params: {
+      agentId: string
+      sessionId: string
+      userMessage: string | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }>
+      attachments?: Array<{ id: string; name: string; absPath: string; relPath: string; size: number; mime: string; kind: string; text?: string; isImage: boolean; ocrNeeded?: boolean; pages?: number }>
+      permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan'
+    }) => ipcRenderer.invoke('agents:runAgent', params),
+    stopAgent: (sessionId: string) => ipcRenderer.invoke('agents:stopAgent', sessionId),
+
+    // 事件订阅
+    onPermissionRequest: (callback: (request: any) => void) => {
+      const listener = (_event: any, request: any) => callback(request)
+      ipcRenderer.on('agent:permission:request', listener)
+      return () => ipcRenderer.off('agent:permission:request', listener)
+    },
+    onToolStart: (callback: (event: any) => void) => {
+      const listener = (_event: any, data: any) => callback(data)
+      ipcRenderer.on('agent:tool:start', listener)
+      return () => ipcRenderer.off('agent:tool:start', listener)
+    },
+    onToolComplete: (callback: (event: any) => void) => {
+      const listener = (_event: any, data: any) => callback(data)
+      ipcRenderer.on('agent:tool:complete', listener)
+      return () => ipcRenderer.off('agent:tool:complete', listener)
+    },
+    onAgentMessage: (callback: (event: any) => void) => {
+      const listener = (_event: any, data: any) => callback(data)
+      ipcRenderer.on('agent:message', listener)
+      return () => ipcRenderer.off('agent:message', listener)
+    },
+    onAgentComplete: (callback: (event: any) => void) => {
+      const listener = (_event: any, data: any) => callback(data)
+      ipcRenderer.on('agent:complete', listener)
+      return () => ipcRenderer.off('agent:complete', listener)
+    },
+    onTodoUpdate: (callback: (event: any) => void) => {
+      const listener = (_event: any, data: any) => callback(data)
+      ipcRenderer.on('agent:todo:update', listener)
+      return () => ipcRenderer.off('agent:todo:update', listener)
+    },
+    /**
+     * 新增：LLM 流式 chunk 事件订阅（v3）
+     * 用于实时显示 LLM 输出的每个 token 片段
+     */
+    onAgentChunk: (callback: (event: { sessionId: string; content: string }) => void) => {
+      const listener = (_event: any, data: any) => callback(data)
+      ipcRenderer.on('agent:llm-chunk', listener)
+      return () => ipcRenderer.off('agent:llm-chunk', listener)
+    },
+    /**
+     * 新增：Agent 错误事件（v3）
+     */
+    onAgentError: (callback: (event: { sessionId: string; error: string }) => void) => {
+      const listener = (_event: any, data: any) => callback(data)
+      ipcRenderer.on('agent:error', listener)
+      return () => ipcRenderer.off('agent:error', listener)
+    },
+    /**
+     * 新增：Agent 中止事件（v3）
+     */
+    onAgentAborted: (callback: (event: { sessionId: string }) => void) => {
+      const listener = (_event: any, data: any) => callback(data)
+      ipcRenderer.on('agent:aborted', listener)
+      return () => ipcRenderer.off('agent:aborted', listener)
+    },
+
+    // ============ 以下为已废弃的反模式 API（v2 遗留）============
+    // 旧版通过 renderer 转发 LLM 请求的设计已废弃，新版 main 端直连 LLM
+    // 保留仅为兼容可能的旧调用方，新代码请使用 onAgentChunk + runAgent
+    onLLMRequest: (callback: (request: any) => void) => {
+      console.warn('[electronAPI.agents.onLLMRequest] 已废弃，请使用 onAgentChunk')
+      const listener = (_event: any, request: any) => callback(request)
+      ipcRenderer.on('ipc:agent-llm-request', listener)
+      return () => ipcRenderer.off('ipc:agent-llm-request', listener)
+    },
+    respondLLM: (eventId: string, data: any, error?: string) => {
+      console.warn('[electronAPI.agents.respondLLM] 已废弃')
+      ipcRenderer.send('ipc:agent-llm-response', { eventId, data, error })
+    },
+  },
+
   pdf: {
     selectFile: () => ipcRenderer.invoke('pdf:selectFile'),
     translate: (params: any) => ipcRenderer.invoke('pdf:translate', params),
@@ -53,17 +181,11 @@ const electronHandler: ElectronIPC = {
     },
   },
 
-  // ========== PDF 格式转换（OCR）新增接口 ==========
-  /**
-   * 调用 PDF 转换服务（当前支持 MinerU / myOCR），将扫描/图片型 PDF 转为可搜索 PDF。
-   * v8.0: 新增 myOCR (OCRmyPDF 本地版)，不需要 API Key，但需要 myOcrOptions
-   */
   convertPDF: (params: {
     service: string
     filePath: string
     apiKey: string
     rebuildMode?: 'auto' | 'json' | 'markdown'
-    /** v8.0: myOCR 专用参数 */
     myOcrOptions?: {
       languages?: string[]
       deskew?: boolean
@@ -75,14 +197,8 @@ const electronHandler: ElectronIPC = {
     }
   }) => ipcRenderer.invoke('pdf-convert:convert', params),
 
-  /**
-   * v8.0: 检测 myOCR 本地环境状态（ocrmypdf / tesseract / ghostscript）
-   */
   detectMyOcrEnv: () => ipcRenderer.invoke('pdf-convert:detect-myocr-env'),
 
-  /**
-   * 监听 PDF 转换进度事件。
-   */
   onPDFConvertProgress: (callback: (data: { progress: number; message: string; currentPage?: number; totalPages?: number }) => void) => {
     const listener = (_event: any, data: { progress: number; message: string; currentPage?: number; totalPages?: number }) => {
       callback(data)
@@ -91,21 +207,12 @@ const electronHandler: ElectronIPC = {
     return () => ipcRenderer.off('pdf-convert:progress', listener)
   },
 
-  /**
-   * 测试服务商连接（验证 API Key）。
-   */
   testPDFConnection: (params: { service: string; apiKey: string }) =>
     ipcRenderer.invoke('pdf-convert:test-connection', params),
 
-  /**
-   * 读取全局 PDF 转换配置（如 API Key）。
-   */
   getPDFConvertGlobalConfig: (service: string) =>
     ipcRenderer.invoke('pdf-convert:get-global-config', service),
 
-  /**
-   * 保存全局 PDF 转换配置。
-   */
   savePDFConvertGlobalConfig: (params: { service: string; config: { apiKey?: string } }) =>
     ipcRenderer.invoke('pdf-convert:save-global-config', params),
 }

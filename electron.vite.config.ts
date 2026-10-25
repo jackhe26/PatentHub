@@ -184,6 +184,8 @@ export default defineConfig(({ mode }) => {
         'process.env.CHATBOX_BUILD_PLATFORM': JSON.stringify(process.env.CHATBOX_BUILD_PLATFORM || 'unknown'),
         'process.env.USE_LOCAL_API': JSON.stringify(process.env.USE_LOCAL_API || ''),
         'process.env.USE_BETA_API': JSON.stringify(process.env.USE_BETA_API || ''),
+        // 自动更新源：留空 = 完全关闭自动更新（构建期注入，见 src/main/app-updater.ts）
+        'process.env.PATENTHUB_UPDATE_URL': JSON.stringify(process.env.PATENTHUB_UPDATE_URL || ''),
       },
     },
     preload: {
@@ -307,6 +309,8 @@ export default defineConfig(({ mode }) => {
         'process.env.CHATBOX_BUILD_PLATFORM': JSON.stringify(process.env.CHATBOX_BUILD_PLATFORM || 'unknown'),
         'process.env.USE_LOCAL_API': JSON.stringify(process.env.USE_LOCAL_API || ''),
         'process.env.USE_BETA_API': JSON.stringify(process.env.USE_BETA_API || ''),
+        // 自动更新源：未配置时隐藏「自动更新 / Beta 更新」开关
+        'process.env.PATENTHUB_UPDATE_URL': JSON.stringify(process.env.PATENTHUB_UPDATE_URL || ''),
       },
       optimizeDeps: {
         include: [

@@ -17,3 +17,12 @@ export const USE_LOCAL_CHATBOX = process.env.USE_LOCAL_CHATBOX || ''
 export const USE_BETA_CHATBOX = process.env.USE_BETA_CHATBOX || ''
 
 export const NODE_ENV = process.env.NODE_ENV || 'development'
+
+/**
+ * 是否配置了自家更新源（构建期由 electron.vite.config.ts 注入）。
+ *
+ * 未配置（默认）时：
+ * - 主进程不会发起任何更新检查（见 src/main/app-updater.ts）；
+ * - 设置页不展示「自动更新 / Beta 更新」开关，避免用户误以为可更新。
+ */
+export const AUTO_UPDATE_ENABLED = Boolean(process.env.PATENTHUB_UPDATE_URL)

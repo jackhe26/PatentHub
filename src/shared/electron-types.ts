@@ -7,6 +7,86 @@ export interface ElectronIPC {
   onUpdateDownloaded: (callback: () => void) => () => void
   addMcpStdioTransportEventListener: (transportId: string, event: string, callback?: (...args: any[]) => void) => void
   onNavigate: (callback: (path: string) => void) => () => void
+
+  // Skills & Agents APIs
+  skills: {
+    list: () => Promise<any[]>
+    getById: (id: string) => Promise<any | null>
+    install: (source: string) => Promise<any>
+    installFromZip: (zipPath: string) => Promise<any>
+    installFromDirectory: (dirPath: string) => Promise<any>
+    uninstall: (id: string) => Promise<void>
+    search: (query: string) => Promise<any[]>
+    readFile: (skillId: string, filename: string) => Promise<string | null>
+    listFiles: (skillId: string) => Promise<any[]>
+  }
+
+  agents: {
+    list: () => Promise<any[]>
+    getById: (id: string) => Promise<any | null>
+    create: (data: any) => Promise<any>
+    update: (id: string, data: any) => Promise<any>
+    delete: (id: string) => Promise<void>
+    getSkills: (agentId: string) => Promise<any[]>
+    toggleSkill: (agentId: string, skillId: string, isEnabled: boolean) => Promise<void>
+
+    // v2 扩展
+    detectGitBash: () => Promise<{ found: boolean; path?: string }>
+    selectGitBashPath: () => Promise<string | null>
+    selectDir: (defaultPath?: string) => Promise<string | null>
+    setAutoApproveTools: (agentId: string, toolNames: string[]) => Promise<boolean>
+    getAutoApproveTools: (agentId: string) => Promise<string[]>
+
+    // 权限询问响应
+    respondPermission: (eventId: string, decision: 'allow' | 'deny', alwaysAllow?: boolean) => Promise<boolean>
+
+    // Agent 附件落盘（通用文件上传）
+    addAttachments: (params: { agentId: string; sessionId: string; files: Array<{ name: string; path?: string; bytes?: Uint8Array }> }) => Promise<
+      Array<{ id: string; name: string; absPath: string; relPath: string; size: number; mime: string; kind: string; text?: string; isImage: boolean; ocrNeeded?: boolean; pages?: number }>
+    >
+    listAttachments: (params: { agentId: string; sessionId: string }) => Promise<Array<{ id: string; name: string; absPath: string; relPath: string; size: number; mime: string; kind: string; text?: string; isImage: boolean; ocrNeeded?: boolean; pages?: number }>>
+    cleanupAttachments: (params: { agentId: string; sessionId: string }) => Promise<boolean>
+
+    // Agent 运行控制
+    runAgent: (params: {
+      agentId: string
+      sessionId: string
+      userMessage: string | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }>
+      attachments?: Array<{
+        id: string
+        name: string
+        absPath: string
+        relPath: string
+        size: number
+        mime: string
+        kind: 'text' | 'pdf' | 'doc' | 'image' | 'other'
+        text?: string
+        isImage: boolean
+        ocrNeeded?: boolean
+        pages?: number
+      }>
+      permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan'
+    }) => Promise<{ started: boolean; sessionId: string }>
+    stopAgent: (sessionId: string) => Promise<boolean>
+
+    // 事件订阅
+    onPermissionRequest: (callback: (request: any) => void) => () => void
+    onToolStart: (callback: (event: any) => void) => () => void
+    onToolComplete: (callback: (event: any) => void) => () => void
+    onAgentMessage: (callback: (event: any) => void) => () => void
+    onAgentComplete: (callback: (event: any) => void) => () => void
+    onTodoUpdate: (callback: (event: any) => void) => () => void
+
+    // v3 新增事件
+    onAgentChunk: (callback: (event: { sessionId: string; content: string }) => void) => () => void
+    onAgentError: (callback: (event: { sessionId: string; error: string }) => void) => () => void
+    onAgentAborted: (callback: (event: { sessionId: string }) => void) => () => void
+
+    // LLM 转发回调（已废弃，新代码请使用 onAgentChunk + runAgent）
+    onLLMRequest: (callback: (request: any) => void) => () => void
+    respondLLM: (eventId: string, data: any, error?: string) => void
+  }
+
   pdf: {
     selectFile: () => Promise<{ path: string; name: string; size: number } | null>
     translate: (params: {
@@ -47,16 +127,10 @@ export interface ElectronIPC {
     }) => void) => () => void
   }
 
-  /**
-   * PDF 格式转换（OCR）相关接口。
-   * 与知识库的 mineru-parser 解耦，独立实现于 src/main/pdf-convert/。
-   * v8.0: 新增 myOCR (OCRmyPDF 本地版)
-   */
   convertPDF: (params: {
     service: string
     filePath: string
     apiKey: string
-    /** v8.0: myOCR 专用参数 */
     myOcrOptions?: {
       languages?: string[]
       deskew?: boolean
@@ -69,34 +143,11 @@ export interface ElectronIPC {
   }) => Promise<{
     success: boolean
     outputPath?: string
-    /**
-     * PDF 类型：
-     *  - scanned:   扫描型 PDF（OCR 处理后）
-     *  - digital:   数字型 PDF（原 PDF，已有文本层）
-     */
     pdfType?: 'scanned' | 'digital'
-    /**
-     * 调试用：MinerU 原始返回的 ZIP 文件路径
-     */
     debugZipPath?: string
-    /**
-     * v7.12 (MinerU-Office): docx 文件绝对路径
-     * 仅 MinerU-Office 服务商返回, 通过 extra_formats=["docx","html"] 生成
-     */
     outputDocxPath?: string
-    /**
-     * v7.12 (MinerU-Office): html 文件绝对路径
-     * 仅 MinerU-Office 服务商返回, MinerU 服务端生成的 HTML
-     */
     outputHtmlPath?: string
-    /**
-     * v8.0 (myOCR): 真实输出的可搜索 PDF 路径
-     * 仅 myocr 服务商返回
-     */
     outputPdfPath?: string
-    /**
-     * v8.0 (myOCR): 本地 OCR 环境探测结果
-     */
     environment?: {
       ok: boolean
       ocrmypdf?: { version: string; path: string }
@@ -108,9 +159,6 @@ export interface ElectronIPC {
     error?: string
   }>
 
-  /**
-   * v8.0: 检测 myOCR 本地环境状态（ocrmypdf / tesseract / ghostscript）
-   */
   detectMyOcrEnv: () => Promise<{
     success: boolean
     env?: {
@@ -130,24 +178,11 @@ export interface ElectronIPC {
     totalPages?: number
   }) => void) => () => void
 
-  /**
-   * 测试服务商连接（验证 API Key）。
-   */
-  testPDFConnection: (params: {
-    service: string
-    apiKey: string
-  }) => Promise<{ success: boolean; error?: string }>
+  testPDFConnection: (params: { service: string; apiKey: string }) =>
+    Promise<{ success: boolean; error?: string }>
 
-  /**
-   * 读取全局 PDF 转换配置。
-   */
   getPDFConvertGlobalConfig: (service: string) => Promise<{ apiKey?: string }>
 
-  /**
-   * 保存全局 PDF 转换配置。
-   */
-  savePDFConvertGlobalConfig: (params: {
-    service: string
-    config: { apiKey?: string }
-  }) => Promise<{ success: boolean; error?: string }>
+  savePDFConvertGlobalConfig: (params: { service: string; config: { apiKey?: string } }) =>
+    Promise<{ success: boolean; error?: string }>
 }

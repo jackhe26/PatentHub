@@ -235,8 +235,12 @@ function updateChangelogs(newVer) {
 
     let content = readFileSync(filePath, 'utf8')
 
-    // 检查是否已有该版本
-    const verRegex = new RegExp(`## v${newVer.replace(/\./g, '\\.')}\\b`)
+    // 检查是否已有该版本。
+    // 注意：changelog 文件里保留了上游 Chatbox 的历史条目，其标题格式为三级标题
+    // `### vX.Y.Z`（例如 `### v1.4.0 - 2024.08.18`），而本脚本插入的是二级标题
+    // `## vX.Y.Z`。因此必须用行首锚定 + `## ` 前缀严格匹配，否则历史同名版本会导致
+    // 误判「已存在」而静默跳过插入。
+    const verRegex = new RegExp(`^## v${newVer.replace(/\./g, '\\.')}\\b`, 'm')
     if (verRegex.test(content)) {
       warn(`${name} 已存在 v${newVer} 条目, 跳过`)
       return
@@ -251,7 +255,7 @@ function updateChangelogs(newVer) {
 
     // 在 const changelog = `\n 后、第一个 ## 之前插入
     content = content.replace(
-      /(const changelog = `\\n)(## v)/,
+      /(const changelog = `\n)(## v)/,
       `$1${newEntry}$2`
     )
 

@@ -20,7 +20,7 @@
   <a href="#"><img alt="Linux" src="https://img.shields.io/badge/Linux-FCC624?style=flat-square&logo=linux&logoColor=black" /></a>
   <a href="#"><img alt="Android" src="https://img.shields.io/badge/Android-3DDC84?style=flat-square&logo=android&logoColor=white" /></a>
   <a href="#"><img alt="License" src="https://img.shields.io/badge/License-GPLv3-green?style=flat-square" /></a>
-  <img alt="Version" src="https://img.shields.io/badge/Version-1.3.6-blue?style=flat-square" />
+  <img alt="Version" src="https://img.shields.io/badge/Version-1.4.6-blue?style=flat-square" />
 </p>
 
 <p align="center">
@@ -40,7 +40,7 @@ PatentHub 是一款基于 AI 大语言模型的桌面/移动应用程序，专�
 - **智能专利检索**：利用 AI 进行语义搜索，快速找到相关专利文献
 - **专利分析**：自动分析专利技术特征，生成技术要点摘要
 - **AI 对话助手**：内置专利领域专业 AI 助手，回答审查相关问题
-- **审查搭档**：在顶部工具栏可快速切换预设审查搭档（形式缺陷审查、提炼检索要素等），实现一键切换审查模式
+- **审查搭档**：在顶部工具栏可快速切换预设审查搭档（形式缺陷审查、提炼检索要素、科普大白等），实现一键切换审查模式
 - **PDF 双栏预览**：上传 PDF 文件时自动开启 PDF 预览+对话双栏模式，支持 PDF 切换按钮整合进顶栏
 - **多模型支持**：支持 OpenAI、Claude、Gemini、Ollama 等多种 AI 模型
 - **跨平台**：支持 Windows、macOS、Linux 及 Android 系统
@@ -51,14 +51,14 @@ PatentHub 是一款基于 AI 大语言模型的桌面/移动应用程序，专�
 
 | 平台 | 安装包 | 说明 |
 |------|--------|------|
-| <img src="https://img.icons8.com/color/24/windows-10.png" width="20"/> **Windows** | [📥 下载 Setup.exe](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.3.6-Setup.exe) | 安装版，支持自定义安装目录 |
-| <img src="https://img.icons8.com/color/24/windows-10.png" width="20"/> **Windows (便携版)** | [📥 下载 Portable.exe](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.3.6-Portable.exe) | 免安装，即开即用 |
-| <img src="https://img.icons8.com/mac-os/24/mac-os.png" width="20"/> **macOS (Intel)** | [📥 下载 .dmg](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.3.6.dmg) | 适用于 Intel 芯片 Mac |
-| <img src="https://img.icons8.com/mac-os/24/mac-os.png" width="20"/> **macOS (Apple Silicon)** | [📥 下载 .dmg](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.3.6-arm64.dmg) | 适用于 M1/M2/M3/M4 芯片 Mac |
-| <img src="https://img.icons8.com/color/24/linux--v1.png" width="20"/> **Linux (AppImage, x64)** | [📥 下载 .AppImage](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.3.6-x64.AppImage) | 通用 Linux 格式 (x64) |
-| <img src="https://img.icons8.com/color/24/linux--v1.png" width="20"/> **Linux (AppImage, arm64)** | [📥 下载 .AppImage](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.3.6-arm64.AppImage) | 通用 Linux 格式 (arm64) |
-| <img src="https://img.icons8.com/color/24/linux--v1.png" width="20"/> **Linux (deb, x64)** | [📥 下载 .deb](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.3.6-amd64.deb) | Debian/Ubuntu 系 (x64) |
-| <img src="https://img.icons8.com/color/24/linux--v1.png" width="20"/> **Linux (deb, arm64)** | [📥 下载 .deb](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.3.6-arm64.deb) | Debian/Ubuntu 系 (arm64) |
+| <img src="https://img.icons8.com/color/24/windows-10.png" width="20"/> **Windows** | [📥 下载 Setup.exe](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.4.6-Setup.exe) | 安装版，支持自定义安装目录 |
+| <img src="https://img.icons8.com/color/24/windows-10.png" width="20"/> **Windows (便携版)** | [📥 下载 Portable.exe](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.4.6-Portable.exe) | 免安装，即开即用 |
+| <img src="https://img.icons8.com/mac-os/24/mac-os.png" width="20"/> **macOS (Intel)** | [📥 下载 .dmg](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.4.6.dmg) | 适用于 Intel 芯片 Mac |
+| <img src="https://img.icons8.com/mac-os/24/mac-os.png" width="20"/> **macOS (Apple Silicon)** | [📥 下载 .dmg](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.4.6-arm64.dmg) | 适用于 M1/M2/M3/M4 芯片 Mac |
+| <img src="https://img.icons8.com/color/24/linux--v1.png" width="20"/> **Linux (AppImage, x64)** | [📥 下载 .AppImage](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.4.6-x64.AppImage) | 通用 Linux 格式 (x64) |
+| <img src="https://img.icons8.com/color/24/linux--v1.png" width="20"/> **Linux (AppImage, arm64)** | [📥 下载 .AppImage](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.4.6-arm64.AppImage) | 通用 Linux 格式 (arm64) |
+| <img src="https://img.icons8.com/color/24/linux--v1.png" width="20"/> **Linux (deb, x64)** | [📥 下载 .deb](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.4.6-amd64.deb) | Debian/Ubuntu 系 (x64) |
+| <img src="https://img.icons8.com/color/24/linux--v1.png" width="20"/> **Linux (deb, arm64)** | [📥 下载 .deb](https://github.com/jackhe26/PatentHub/releases/latest/download/PatentHub-1.4.6-arm64.deb) | Debian/Ubuntu 系 (arm64) |
 
 ### 📱 Mobile 版本
 
@@ -186,6 +186,30 @@ PatentHub/
 ```
 
 ## 更新日志
+
+### v1.4.6 (2026-10-25)
+
+- ✨ **新增审查搭档「科普大白」**：把权利要求逐条改写成「原文 / 比喻 / 总结」三列表格，并输出 R1–R12 核对报告与一句话总览；作为第 2 个内置搭档，支持 `/2`、`/kpdb`、`/科普` 快捷调用
+- 🔧 **内置搭档编号与 ID 重排**：科普大白为 02，原 02–09 顺延为 03–10，展示序号、`/序号` 与 ID 编号保持一致
+- 🔧 **新增会话搭档 ID 自动迁移**：读取旧会话时自动把旧编号映射为新编号（含 V1 时期遗留 id），避免顶部显示「选择搭档」、搭档 Chip 缺失及手动移除后提示词残留
+- ✅ **新增单测**：覆盖搭档 ID 迁移、斜杠命令序号 / 拼音 / 中文检索
+- 🐛 **屏蔽上游 Chatbox 自动更新源**：自动更新默认完全关闭、不再访问 chatboxai.app；未配置自家更新源时隐藏「自动更新 / Beta 更新」开关，`install-update` 增加双重安全校验（详见 `docs/auto-update.md`）
+
+### v1.4.5 (2026-10-24)
+
+- ✨ **优化「文献检索」提示词**（原「非专利文献检索」）：统一覆盖专利与非专利文献；新增检索要素分解、三层检索轮次（专利 → 非专利 → 灰文献）、相关度评分定档、专利族去重与公开日三查、幻觉治理红线；「检索策略与检索式」改为报告末尾附表
+- ✨ **优化「审查意见答复」提示词**：默认不检索，直接依据前次通知书引用的对比文件（D1、D2…）与说明书原文进行针对性答复；补充检索须显式判定并经用户确认，新增证据按 D3、D4… 顺延编号，未获同意时按公知常识基于原证据评述
+- 🔧 **同步修正**：「提炼检索要素」提示词内部名称、架构文档文案、检索搭档拼音索引（文献检索 → wxjs）
+- 🐛 **修复版本升级脚本**：`bump-version.mjs` 中 changelog 插入正则误写为 `\\n`，导致新版本条目未写入 3 个 changelog 文件却提示成功
+
+### v1.4.0 (2026-09-19)
+
+- ✨ **新增 Agent（智能体）模块**：侧边栏新增「🤖 Agents」入口，支持创建与编辑 Agent、多轮工具调用、权限模式、Git Bash 自动发现、工作目录与环境变量配置
+- ✨ **新增 Skills（技能）模块**：侧边栏新增「⚡ Skills」入口，Agent 可挂载并调用技能
+- ✨ **新增 Agent 工具集**：Bash、文件读写、Glob、Task、Skill 等工具，并支持工具调用气泡与 Todo 进度条
+- 🐛 **修复 Agent 选择 MiniMax 模型无法连接大模型的问题**：请求被错误回退到 OpenAI 端点
+- 🐛 **修复拖拽 PDF 上传解析失败的问题**
+- 🐛 **修复 Agent 页面窗口按钮与附件图标显示问题**
 
 ### v1.3.6 (2026-07-04)
 

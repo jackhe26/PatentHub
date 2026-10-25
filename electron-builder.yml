@@ -47,6 +47,19 @@ win:
       arch:
         - x64
   publisherName: 专利审查四川中心
+  # === 代码签名（按需启用，详见 docs/code-signing.md）===
+  # USB Token / 证书已装入 Windows 证书库时，二选一：
+  # certificateSubjectName: "证书 Subject 中的 CN"
+  # certificateSha1: "证书指纹（去空格，大写）"
+  # .pfx 证书：优先在构建时用环境变量 CSC_LINK / CSC_KEY_PASSWORD，不要把密码写进仓库；
+  # 如确需写在此处，取消下面两行注释：
+  # certificateFile: C:\certs\patenthub.pfx
+  # certificatePassword: "******"
+  # 云 HSM（DigiCert KeyLocker / Sectigo / SSL.com / Azure Trusted Signing 等）：
+  # sign: ./scripts/sign-windows.mjs
+  # signingHashAlgorithms:
+  #   - sha256
+  # rfc3161TimeStampServer: http://timestamp.digicert.com
 
 nsis:
   oneClick: false

@@ -1,4 +1,4 @@
-/** biome-ignore-all lint/suspicious/noExplicitAny: <any> */
+﻿/** biome-ignore-all lint/suspicious/noExplicitAny: <any> */
 import type { Config, Language, Settings, ShortcutSetting } from '@shared/types'
 import type { ImageGenerationStorage } from '@/storage/ImageGenerationStorage'
 import type { KnowledgeBaseController } from './knowledge-base/interface'
@@ -67,7 +67,10 @@ export interface Platform extends Storage {
 
   ensureAutoLaunch(enable: boolean): Promise<void>
 
-  parseFileLocally(file: File): Promise<{ key?: string; isSupported: boolean; error?: string }>
+  parseFileLocally(file: File): Promise<{ key?: string; isSupported: boolean; error?: string; tempPath?: string }>
+
+  // 为 PDF 预览写一个临时文件，返回其路径（拖拽/缓存命中场景使用；仅桌面端实现）
+  writeFileForPreview?(file: File): Promise<string | undefined>
 
   // Parse PDF using pdf.js (Mobile only)
   parsePdfWithPdfJs?(file: File): Promise<{ content: string; error?: string; textParts?: string[]; textBlocks?: any[][] }>

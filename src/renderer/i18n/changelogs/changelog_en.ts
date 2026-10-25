@@ -1,4 +1,24 @@
 const changelog = `
+## v1.4.6 - 2026.10.25
+1. Added the "Science Explainer" (科普大白) copilot: rewrites each claim into a plain-language three-column table (original / analogy / summary), then outputs an R1–R12 verification report and a one-sentence overview; it sits second and supports /2, /kpdb and /科普 slash shortcuts
+2. Renumbered the built-in copilots: Science Explainer is 02 and the previous 02–09 shift to 03–10, keeping display order, slash index and IDs in sync
+3. Added automatic copilot-ID migration for existing sessions (including legacy V1 IDs), fixing missing copilot names/chips and leftover system prompts after manual removal
+4. Added unit tests covering copilot-ID migration and slash-command matching by index, pinyin and Chinese name
+5. Blocked the upstream Chatbox auto-update feed: auto-update is off by default with no requests to chatboxai.app, update switches are hidden when no custom feed is configured, and install-update now has safety guards
+
+## v1.4.5 - 2026.10.24
+1. Improved the Literature Search copilot prompt (formerly Non-Patent Literature Search): now covers both patent and non-patent literature, with search-element decomposition, a three-round search protocol, relevance scoring, patent-family deduplication, publication-date verification, anti-hallucination rules, and a search-strategy appendix at the end of the report
+2. Improved the Office Action Response copilot prompt: no search by default, responding directly with the evidence cited in the previous office action; any supplementary search must be explicitly declared and confirmed by the user, with new evidence numbered D3, D4, ...
+3. Fixed the internal title of the Extract Search Elements prompt and updated the architecture docs and the copilot pinyin index
+
+## v1.4.0 - 2026.09.19
+1. Added the Agent module: a new "Agents" entry in the sidebar, supporting agent creation/editing, multi-turn tool calling, permission modes, Git Bash auto-detection, working directories and environment variables
+2. Added the Skills module: a new "Skills" entry in the sidebar, allowing agents to mount and invoke skills
+3. Added the Agent tool set (Bash, file read/write, Glob, Task, Skill, etc.) with tool-call bubbles and a Todo progress bar
+4. Fixed the Agent failing to connect when a MiniMax model was selected (the request fell back to the OpenAI endpoint by mistake)
+5. Fixed drag-and-drop PDF upload parsing failures
+6. Fixed window button and attachment icon rendering issues on the Agent page
+
 ## v1.3.6 - 2026.07.04
 1. Added 3 new domestic LLM providers: Moonshot (Kimi), MiniMax, Zhipu (ChatGLM)
 2. Updated default model lists for 6 providers (OpenAI, Claude, Gemini, DeepSeek, xAI, VolcEngine)

@@ -98,7 +98,7 @@ export function settings(): Settings {
     compactionThreshold: 0.6,
 
     autoLaunch: false,
-    autoUpdate: true,
+    autoUpdate: false, // 默认关闭：未配置 PATENTHUB_UPDATE_URL 时不检查更新（避免被上游 Chatbox 更新源劫持）
     betaUpdate: false,
 
     shortcuts: {

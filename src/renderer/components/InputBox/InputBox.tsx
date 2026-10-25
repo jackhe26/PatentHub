@@ -33,11 +33,14 @@ import {
   IconHammer,
   IconLink,
   IconPhoto,
+  IconPin,
+  IconPinned,
   IconPlayerStopFilled,
   IconPlus,
   IconSettings,
   IconVocabulary,
   IconWorldWww,
+  IconX,
 } from '@tabler/icons-react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
@@ -48,6 +51,7 @@ import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useMemo,
 import { useDropzone } from 'react-dropzone'
 import { useTranslation } from 'react-i18next'
 import { createModelDependencies } from '@/adapters'
+import { useMyCopilots } from '@/hooks/useCopilots'
 import useInputBoxHistory from '@/hooks/useInputBoxHistory'
 import { useKnowledgeBase } from '@/hooks/useKnowledgeBase'
 import { useMessageInput } from '@/hooks/useMessageInput'
@@ -76,6 +80,7 @@ import { delay } from '@/utils'
 import { featureFlags } from '@/utils/feature-flags'
 import { trackEvent } from '@/utils/track'
 import {
+  type CopilotDetail,
   type KnowledgeBase,
   type Message,
   ModelProviderEnum,
@@ -87,6 +92,7 @@ import * as sessionHelpers from '../../stores/sessionHelpers'
 import * as toastActions from '../../stores/toastActions'
 import { CompactionStatus } from '../chat/CompactionStatus'
 import { CompressionModal } from '../common/CompressionModal'
+import { CopilotIndexBadge } from '../common/CopilotIndexBadge'
 import { ScalableIcon } from '../common/ScalableIcon'
 import Disclaimer from '../Disclaimer'
 import ProviderImageIcon from '../icons/ProviderImageIcon'
@@ -105,6 +111,9 @@ import {
   storeFilePromise,
   storeLinkPromise,
 } from './preprocessState'
+import type { CopilotCandidate } from './slash-copilot/match'
+import SlashCopilotMenu from './slash-copilot/SlashCopilotMenu'
+import { useSlashCommand } from './slash-copilot/useSlashCommand'
 import TokenCountMenu from './TokenCountMenu'
 
 export type InputBoxPayload = {
@@ -132,6 +141,14 @@ export type InputBoxProps = {
   onStartNewThread?(): boolean
   onRollbackThread?(): boolean
   onClickSessionSettings?(): boolean | Promise<boolean>
+  /** 当前会话已挂载的审查搭档 id */
+  copilotId?: string
+  /** 搭档是否「保持到会话结束」（默认 false：发送后自动摘除） */
+  copilotPinned?: boolean
+  /** 切换「保持到会话结束」 */
+  onToggleCopilotPinned?(): void
+  /** 选择或清除审查搭档（静默挂载，不发起对话） */
+  onSelectCopilot?(copilot?: CopilotDetail): void
 }
 
 const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
@@ -148,6 +165,10 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
       onStartNewThread,
       onRollbackThread,
       onClickSessionSettings,
+      copilotId,
+      copilotPinned = false,
+      onToggleCopilotPinned,
+      onSelectCopilot,
     },
     ref
   ) => {
@@ -426,6 +447,55 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
 
     const inputRef = useRef<HTMLTextAreaElement | null>(null)
 
+    // ------ 审查搭档：输入框内 '/' 唤起（静默挂载，不发起对话） ------
+    const { copilots: slashCopilots } = useMyCopilots()
+    const {
+      open: slashOpen,
+      activeIndex: slashActiveIndex,
+      results: slashResults,
+      sync: slashSync,
+      close: slashClose,
+      moveActive: slashMoveActive,
+      setActiveIndex: slashSetActiveIndex,
+      buildRemaining: slashBuildRemaining,
+      manual: slashManual,
+      openPicker: slashOpenPicker,
+    } = useSlashCommand(slashCopilots, messageInput)
+    const slashComposingRef = useRef(false)
+    const selectedCopilot = useMemo(
+      () => slashCopilots.find((copilot) => copilot.id === copilotId),
+      [slashCopilots, copilotId]
+    )
+
+    /** 点击已选搭档的 Chip：就地唤出面板换一个，无需先删再选 */
+    const openSlashPicker = useCallback(() => {
+      inputRef.current?.focus()
+      slashOpenPicker()
+    }, [slashOpenPicker])
+
+    const applySlashCopilot = useCallback(
+      (candidate: CopilotCandidate) => {
+        const caret = inputRef.current?.selectionStart ?? messageInput.length
+        // 手动点 Chip 唤起时只换搭档，不改动输入框内容
+        let remaining = slashManual ? { text: messageInput, cursor: caret } : slashBuildRemaining(messageInput, caret)
+        // 光标可能已不在 /query 之后（点发送按钮、失焦等），退回到文本末尾再删一次
+        if (!slashManual && remaining.text === messageInput && caret !== messageInput.length) {
+          remaining = slashBuildRemaining(messageInput, messageInput.length)
+        }
+        setMessageInput(remaining.text)
+        slashClose()
+        onSelectCopilot?.(candidate.copilot)
+        requestAnimationFrame(() => {
+          const element = inputRef.current
+          if (!element) return
+          const cursor = Math.max(0, Math.min(remaining.cursor, element.value.length))
+          element.focus()
+          element.setSelectionRange(cursor, cursor)
+        })
+      },
+      [messageInput, slashManual, slashBuildRemaining, setMessageInput, slashClose, onSelectCopilot]
+    )
+
     useImperativeHandle(
       ref,
       () => ({
@@ -443,6 +513,17 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
 
     const closeSelectModelErrorTipCb = useRef<NodeJS.Timeout>()
     const handleSubmit = async (needGenerating = true) => {
+      // '/' 面板还开着（例如直接点发送按钮、或用快捷键发送）：先应用当前选中的搭档，
+      // 避免把 "/tzs" 这种半截命令当成消息发出去，也避免命令残留到下一次输入
+      if (slashOpen) {
+        const target = slashResults[slashActiveIndex] ?? slashResults[0]
+        if (target) {
+          applySlashCopilot(target)
+          return
+        }
+        slashClose()
+      }
+
       if (disableSubmit || generating || isSubmitting || isPreprocessing) {
         return
       }
@@ -522,11 +603,41 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
         const input = event.target.value
         setMessageInput(input)
         resetHistoryIndex()
+        slashSync(input, event.target.selectionStart ?? input.length, slashComposingRef.current)
       },
-      [setMessageInput, resetHistoryIndex]
+      [setMessageInput, resetHistoryIndex, slashSync]
     )
 
     const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      // '/' 搭档面板优先接管按键，避免 Enter 把半截命令当消息发出去
+      if (slashOpen) {
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          slashClose()
+          return
+        }
+        // 没有匹配项时（例如输入的是文件路径 /usr/bin）不拦截，交回正常的发送/移动逻辑
+        if (slashResults.length > 0) {
+          if (event.key === 'ArrowDown') {
+            event.preventDefault()
+            slashMoveActive(1)
+            return
+          }
+          if (event.key === 'ArrowUp') {
+            event.preventDefault()
+            slashMoveActive(-1)
+            return
+          }
+          if (event.key === 'Enter' || event.key === 'Tab') {
+            event.preventDefault()
+            const target = slashResults[slashActiveIndex]
+            if (target) applySlashCopilot(target)
+            else slashClose()
+            return
+          }
+        }
+      }
+
       const isPressedHash: Record<ShortcutSendValue, boolean> = {
         '': false,
         Enter: event.keyCode === 13 && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey,
@@ -888,9 +999,70 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
               'rounded-md bg-chatbox-background-secondary justify-between px-3 py-2',
               !isSmallScreen && 'min-h-[92px]'
             )}
-            style={{ border: '1px solid var(--chatbox-border-primary)' }}
+            style={{ border: '1px solid var(--chatbox-border-primary)', position: 'relative' }}
             gap="xs"
           >
+            {slashOpen && (
+              <SlashCopilotMenu
+                results={slashResults}
+                activeIndex={slashActiveIndex}
+                selectedId={selectedCopilot?.id}
+                onSelect={applySlashCopilot}
+                onHover={slashSetActiveIndex}
+                onClear={() => {
+                  slashClose()
+                  onSelectCopilot?.(undefined)
+                }}
+              />
+            )}
+            {selectedCopilot && (
+              <Flex
+                align="center"
+                gap={4}
+                w="fit-content"
+                className="rounded-md px-1.5 py-1"
+                style={{ backgroundColor: 'var(--chatbox-background-tertiary)' }}
+              >
+                <Tooltip label={t('Change Copilot')} withArrow openDelay={400}>
+                  <UnstyledButton
+                    className="flex items-center gap-1.5 px-1 rounded hover:opacity-75"
+                    aria-label={t('Change Copilot')}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={openSlashPicker}
+                  >
+                    <CopilotIndexBadge
+                      index={Math.max(1, slashCopilots.findIndex((item) => item.id === selectedCopilot.id) + 1)}
+                      size="xs"
+                    />
+                    <Text size="xs" c="chatbox-secondary">
+                      {selectedCopilot.name}
+                    </Text>
+                  </UnstyledButton>
+                </Tooltip>
+                {onToggleCopilotPinned && (
+                  <Tooltip label={copilotPinned ? t('Unpin Copilot') : t('Pin Copilot')} withArrow openDelay={400}>
+                    <ActionIcon
+                      size="xs"
+                      variant={copilotPinned ? 'light' : 'subtle'}
+                      color={copilotPinned ? 'chatbox-brand' : 'gray'}
+                      aria-label={copilotPinned ? t('Unpin Copilot') : t('Pin Copilot')}
+                      onClick={onToggleCopilotPinned}
+                    >
+                      {copilotPinned ? <IconPinned size={12} /> : <IconPin size={12} />}
+                    </ActionIcon>
+                  </Tooltip>
+                )}
+                <ActionIcon
+                  size="xs"
+                  variant="subtle"
+                  color="gray"
+                  aria-label="remove copilot"
+                  onClick={() => onSelectCopilot?.(undefined)}
+                >
+                  <IconX size={12} />
+                </ActionIcon>
+              </Flex>
+            )}
             {/* Input Row */}
             <Flex align="flex-end" gap={4}>
               <Textarea
@@ -915,6 +1087,14 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
                 onChange={onMessageInput}
                 onKeyDown={onKeyDown}
                 onPaste={onPaste}
+                onCompositionStart={() => {
+                  slashComposingRef.current = true
+                }}
+                onCompositionEnd={(event) => {
+                  slashComposingRef.current = false
+                  slashSync(event.currentTarget.value, event.currentTarget.selectionStart ?? 0, false)
+                }}
+                onBlur={() => slashClose()}
               />
 
               {/* Send Button */}

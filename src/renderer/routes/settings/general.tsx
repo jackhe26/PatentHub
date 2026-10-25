@@ -29,6 +29,7 @@ import storage, { StorageKey } from '@/storage'
 import { recoverSessionList } from '@/stores/chatStore'
 import { migrateOnData } from '@/stores/migration'
 import { useSettingsStore } from '@/stores/settingsStore'
+import { AUTO_UPDATE_ENABLED } from '@/variables'
 
 export const Route = createFileRoute('/settings/general')({
   component: RouteComponent,
@@ -201,24 +202,28 @@ export function RouteComponent() {
                 })
               }
             />
-            <Switch
-              label={t('Automatic updates')}
-              checked={settings.autoUpdate}
-              onChange={(e) =>
-                setSettings({
-                  autoUpdate: e.currentTarget.checked,
-                })
-              }
-            />
-            <Switch
-              label={t('Beta updates')}
-              checked={settings.betaUpdate}
-              onChange={(e) =>
-                setSettings({
-                  betaUpdate: e.currentTarget.checked,
-                })
-              }
-            />
+            {AUTO_UPDATE_ENABLED && (
+              <>
+                <Switch
+                  label={t('Automatic updates')}
+                  checked={settings.autoUpdate}
+                  onChange={(e) =>
+                    setSettings({
+                      autoUpdate: e.currentTarget.checked,
+                    })
+                  }
+                />
+                <Switch
+                  label={t('Beta updates')}
+                  checked={settings.betaUpdate}
+                  onChange={(e) =>
+                    setSettings({
+                      betaUpdate: e.currentTarget.checked,
+                    })
+                  }
+                />
+              </>
+            )}
           </Stack>
         </>
       )}

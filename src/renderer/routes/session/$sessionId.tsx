@@ -1,10 +1,11 @@
 import NiceModal from '@ebay/nice-modal-react'
-import { ActionIcon, Box, Button, Card, Menu, Stack, Text, Group } from '@mantine/core'
-import { IconFileTypePdf, IconFileOff, IconMessage } from '@tabler/icons-react'
-import type { CopilotDetail, Message, ModelProvider, MessageFile } from '@shared/types'
+import { ActionIcon, Box, Button, Card, Group, Menu, Stack, Text } from '@mantine/core'
+import type { CopilotDetail, Message, MessageFile, ModelProvider } from '@shared/types'
+import { IconFileOff, IconFileTypePdf, IconMessage } from '@tabler/icons-react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { v4 as uuidv4 } from 'uuid'
 import { useStore } from 'zustand'
 import MessageList, { type MessageListRef } from '@/components/chat/MessageList'
 import { CopilotIndexBadge } from '@/components/common/CopilotIndexBadge'
@@ -13,14 +14,15 @@ import InputBox from '@/components/InputBox/InputBox'
 import Header from '@/components/layout/Header'
 import ThreadHistoryDrawer from '@/components/session/ThreadHistoryDrawer'
 import { useMyCopilots, useRemoteCopilots } from '@/hooks/useCopilots'
+import platform from '@/platform'
+import { pdfRenderer } from '@/platform/PdfRendererBridge'
+import storage from '@/storage'
 import { updateSession as updateSessionStore, useSession } from '@/stores/chatStore'
 import { lastUsedModelStore } from '@/stores/lastUsedModelStore'
 import * as scrollActions from '@/stores/scrollActions'
+import { detachCopilot } from '@/stores/session/copilot'
 import { modifyMessage, removeCurrentThread, startNewThread, submitNewUserMessage } from '@/stores/sessionActions'
 import { getAllMessageList } from '@/stores/sessionHelpers'
-import platform from '@/platform'
-import storage from '@/storage'
-import { pdfRenderer } from '@/platform/PdfRendererBridge'
 
 export const Route = createFileRoute('/session/$sessionId')({
   component: RouteComponent,
@@ -76,7 +78,9 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
   const [renderedW, setRenderedW] = useState(0)
   const [renderedH, setRenderedH] = useState(0)
   const [textBlocks, setTextBlocks] = useState<any[][]>([])
-  const [allParagraphsList, setAllParagraphsList] = useState<{ start: number; end: number; text: string; blocks: any[] }[]>([])
+  const [allParagraphsList, setAllParagraphsList] = useState<
+    { start: number; end: number; text: string; blocks: any[] }[]
+  >([])
   const [nearestParaIdx, setNearestParaIdx] = useState<number>(-1)
   const [expandedIdx, setExpandedIdx] = useState<number>(-1)
   const [copiedIdx, setCopiedIdx] = useState<number>(-1)
@@ -120,7 +124,7 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
       // Desktop: load via file://
       if (filePath) {
         try {
-          const fileUrl = `file:///${filePath.replace(/\\/g, '/')}`
+          const fileUrl = `file:///${encodeURI(filePath.replace(/\\/g, '/'))}`
           setBlobUrl(fileUrl)
           setLoading(false)
           return
@@ -404,11 +408,22 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
           }}
         >
           {loading ? (
-            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div
+              style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
               <span style={{ fontSize: 14, color: '#9ca3af' }}>Loading PDF...</span>
             </div>
           ) : error ? (
-            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+            <div
+              style={{
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 16,
+              }}
+            >
               <span style={{ fontSize: 13, color: '#ef4444', textAlign: 'center' }}>{error}</span>
             </div>
           ) : pageImage ? (
@@ -445,7 +460,9 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
               )}
             </>
           ) : (
-            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div
+              style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
               <span style={{ fontSize: 14, color: '#9ca3af' }}>PDF 正在加载…</span>
             </div>
           )}
@@ -480,18 +497,41 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
-                <span style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>第 {currentPage + 1} 页 · 目标段落 ± 1</span>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '12px 16px',
+                  borderBottom: '1px solid #e5e7eb',
+                  flexShrink: 0,
+                }}
+              >
+                <span style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>
+                  第 {currentPage + 1} 页 · 目标段落 ± 1
+                </span>
                 <button
                   onClick={() => setShowTextModal(false)}
-                  style={{ background: '#f3f4f6', border: 'none', borderRadius: 6, padding: '4px 12px', fontSize: 12, color: '#6b7280', cursor: 'pointer' }}
+                  style={{
+                    background: '#f3f4f6',
+                    border: 'none',
+                    borderRadius: 6,
+                    padding: '4px 12px',
+                    fontSize: 12,
+                    color: '#6b7280',
+                    cursor: 'pointer',
+                  }}
                 >
                   关闭
                 </button>
               </div>
-              <div style={{ flex: 1, overflow: 'hidden', padding: '12px 16px', display: 'flex', flexDirection: 'column' }}>
+              <div
+                style={{ flex: 1, overflow: 'hidden', padding: '12px 16px', display: 'flex', flexDirection: 'column' }}
+              >
                 {allParagraphsList.length === 0 || nearestParaIdx < 0 ? (
-                  <div style={{ textAlign: 'center', color: '#9ca3af', padding: '40px 0', fontSize: 13 }}>未找到目标段落</div>
+                  <div style={{ textAlign: 'center', color: '#9ca3af', padding: '40px 0', fontSize: 13 }}>
+                    未找到目标段落
+                  </div>
                 ) : (
                   (() => {
                     const startIdx = Math.max(0, nearestParaIdx - 1)
@@ -500,8 +540,24 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
                     const combinedText = slices.map((p, i) => (i > 0 ? '\n\n' : '') + p.text).join('')
                     return (
                       <>
-                        <div style={{ fontSize: 11, color: '#9ca3af', paddingBottom: 8, flexShrink: 0 }}>第 {startIdx + 1}–{endIdx + 1} 段</div>
-                        <div style={{ flex: 1, overflowY: 'auto', fontSize: 13, color: '#1f2937', lineHeight: 1.9, background: '#fafafa', borderRadius: 8, padding: '12px 14px', border: '1px solid #e5e7eb', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                        <div style={{ fontSize: 11, color: '#9ca3af', paddingBottom: 8, flexShrink: 0 }}>
+                          第 {startIdx + 1}–{endIdx + 1} 段
+                        </div>
+                        <div
+                          style={{
+                            flex: 1,
+                            overflowY: 'auto',
+                            fontSize: 13,
+                            color: '#1f2937',
+                            lineHeight: 1.9,
+                            background: '#fafafa',
+                            borderRadius: 8,
+                            padding: '12px 14px',
+                            border: '1px solid #e5e7eb',
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
+                          }}
+                        >
                           {combinedText}
                         </div>
                       </>
@@ -517,23 +573,52 @@ function PDFPreviewPanel({ pdfFile }: { pdfFile: MessageFile }) {
   }
 
   return (
-    <Card shadow="sm" padding="sm" radius="md" withBorder style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Card
+      shadow="sm"
+      padding="sm"
+      radius="md"
+      withBorder
+      style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+    >
       <Stack gap="xs" style={{ flex: 1, minHeight: 0 }}>
         <Group justify="space-between">
-          <Text size="sm" fw="bold">PDF Preview</Text>
-          <Text size="xs" c="dimmed">{pdfFile.name}</Text>
+          <Text size="sm" fw="bold">
+            PDF Preview
+          </Text>
+          <Text size="xs" c="dimmed">
+            {pdfFile.name}
+          </Text>
         </Group>
         <Box style={{ flex: 1, minHeight: 0, background: '#f5f5f5', borderRadius: 4, overflow: 'hidden' }}>
           {loading ? (
-            <Box style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Text size="sm" c="dimmed">Loading PDF...</Text>
+            <Box
+              style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text size="sm" c="dimmed">
+                Loading PDF...
+              </Text>
             </Box>
           ) : error ? (
-            <Box style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-              <Text size="sm" c="red" ta="center">{error}</Text>
+            <Box
+              style={{
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 16,
+              }}
+            >
+              <Text size="sm" c="red" ta="center">
+                {error}
+              </Text>
             </Box>
           ) : blobUrl ? (
-            <iframe src={blobUrl} style={{ width: '100%', height: '100%', border: 'none', borderRadius: '4px' }} title="PDF Preview" />
+            <iframe
+              src={blobUrl}
+              style={{ width: '100%', height: '100%', border: 'none', borderRadius: '4px' }}
+              title="PDF Preview"
+            />
           ) : null}
         </Box>
       </Stack>
@@ -654,17 +739,32 @@ function RouteComponent() {
     [myCopilots, remoteCopilots, selectedCopilotId]
   )
 
-  const handleSelectCopilot = useCallback(
-    async (copilot: CopilotDetail | undefined) => {
-      if (!currentSession || !copilot) return
-      if (lastGeneratingMessage?.generating) {
+  /**
+   * 挂载 / 切换 / 清除审查搭档。
+   * silent=true 时只替换 system 消息，不自动发送「你好」并触发对话（输入框内 / 选择器使用）。
+   */
+  const applyCopilot = useCallback(
+    async (copilot: CopilotDetail | undefined, options?: { silent?: boolean }) => {
+      if (!currentSession) return
+      const silent = options?.silent ?? false
+      const currentMessages = currentSession.messages || []
+
+      if (!copilot) {
+        // 清除搭档：仅当首条 system 消息确实是当前搭档的 prompt 时才移除，避免误删自定义 system
+        const activeCopilot =
+          myCopilots.find((item) => item.id === currentSession.copilotId) ||
+          remoteCopilots.find((item) => item.id === currentSession.copilotId)
+        await detachCopilot(currentSession.id, { expectedPrompt: activeCopilot?.prompt })
+        return
+      }
+
+      if (!silent && lastGeneratingMessage?.generating) {
         lastGeneratingMessage?.cancel?.()
       }
-      const currentMessages = currentSession.messages || []
       const newMessages = [...currentMessages]
       const systemMsgIndex = newMessages.findIndex((m) => m.role === 'system')
       const newSystemMessage = {
-        id: systemMsgIndex >= 0 ? newMessages[systemMsgIndex].id : crypto.randomUUID(),
+        id: systemMsgIndex >= 0 ? newMessages[systemMsgIndex].id : uuidv4(),
         role: 'system' as const,
         contentParts: [{ type: 'text' as const, text: copilot.prompt }],
       }
@@ -675,9 +775,12 @@ function RouteComponent() {
         copilotId: copilot.id,
         messages: newMessages,
       })
+
+      if (silent) return
+
       setTimeout(async () => {
         const userMessage: Message = {
-          id: crypto.randomUUID(),
+          id: uuidv4(),
           role: 'user',
           contentParts: [{ type: 'text', text: '你好，' + copilot.name + '！' }],
           timestamp: Date.now(),
@@ -689,8 +792,19 @@ function RouteComponent() {
         })
       }, 500)
     },
-    [currentSession, lastGeneratingMessage]
+    [currentSession, lastGeneratingMessage, myCopilots, remoteCopilots]
   )
+
+  const handleSelectCopilot = useCallback(
+    (copilot: CopilotDetail | undefined) => applyCopilot(copilot, { silent: false }),
+    [applyCopilot]
+  )
+
+  /** 切换「保持到会话结束」：默认（未钉住）发送后自动摘除搭档 */
+  const onToggleCopilotPinned = useCallback(() => {
+    if (!currentSession) return
+    void updateSessionStore(currentSession.id, { copilotPinned: !currentSession.copilotPinned })
+  }, [currentSession])
 
   const singlePdfFile = useMemo(() => {
     if (!currentSession) return null
@@ -705,10 +819,12 @@ function RouteComponent() {
           {selectedCopilot ? (
             <Group gap={6} wrap="nowrap" align="center">
               <CopilotIndexBadge
-                index={Math.max(
-                  0,
-                  myCopilots.findIndex((c) => c.id === selectedCopilot.id)
-                ) + 1}
+                index={
+                  Math.max(
+                    0,
+                    myCopilots.findIndex((c) => c.id === selectedCopilot.id)
+                  ) + 1
+                }
                 size="xs"
               />
               <span>{selectedCopilot.name}</span>
@@ -758,7 +874,15 @@ function RouteComponent() {
       title={showPdfPanel ? '隐藏PDF预览' : '显示PDF预览'}
       className="controls"
     >
-      {showPdfPanel ? (platform.type === 'mobile' ? <IconMessage size={20} /> : <IconFileTypePdf size={20} />) : <IconFileOff size={20} />}
+      {showPdfPanel ? (
+        platform.type === 'mobile' ? (
+          <IconMessage size={20} />
+        ) : (
+          <IconFileTypePdf size={20} />
+        )
+      ) : (
+        <IconFileOff size={20} />
+      )}
     </ActionIcon>
   )
 
@@ -771,10 +895,25 @@ function RouteComponent() {
       <div className="flex flex-col h-full">
         <Header session={currentSession} leftActions={pdfToggleButton} copilotSelector={copilotMenu} />
         <div className="flex flex-1 min-h-0" style={{ flex: 1 }}>
-          <div style={{ width: pdfWidth, padding: isMobile ? 0 : '0 8px', display: showPdfPanel ? 'block' : 'none', transition: 'width 0.2s ease' }}>
+          <div
+            style={{
+              width: pdfWidth,
+              padding: isMobile ? 0 : '0 8px',
+              display: showPdfPanel ? 'block' : 'none',
+              transition: 'width 0.2s ease',
+            }}
+          >
             <PDFPreviewPanel pdfFile={singlePdfFile} />
           </div>
-          <div style={{ width: chatWidth, padding: '0 8px', display: 'flex', flexDirection: 'column', transition: 'width 0.2s ease' }}>
+          <div
+            style={{
+              width: chatWidth,
+              padding: '0 8px',
+              display: 'flex',
+              flexDirection: 'column',
+              transition: 'width 0.2s ease',
+            }}
+          >
             <MessageList ref={messageListRef} key={`message-list${currentSessionId}`} currentSession={currentSession} />
           </div>
         </div>
@@ -789,6 +928,10 @@ function RouteComponent() {
             onSelectModel={onSelectModel}
             onClickSessionSettings={onClickSessionSettings}
             generating={!!lastGeneratingMessage}
+            copilotId={currentSession.copilotId}
+            copilotPinned={currentSession.copilotPinned}
+            onToggleCopilotPinned={onToggleCopilotPinned}
+            onSelectCopilot={(copilot) => void applyCopilot(copilot, { silent: true })}
             onSubmit={onSubmit}
             onStopGenerating={onStopGenerating}
           />
@@ -813,6 +956,10 @@ function RouteComponent() {
           onSelectModel={onSelectModel}
           onClickSessionSettings={onClickSessionSettings}
           generating={!!lastGeneratingMessage}
+          copilotId={currentSession.copilotId}
+          copilotPinned={currentSession.copilotPinned}
+          onToggleCopilotPinned={onToggleCopilotPinned}
+          onSelectCopilot={(copilot) => void applyCopilot(copilot, { silent: true })}
           onSubmit={onSubmit}
           onStopGenerating={onStopGenerating}
         />

@@ -34,6 +34,7 @@ import { trackEvent } from '@/utils/track'
 import * as chatStore from '../chatStore'
 import { settingsStore } from '../settingsStore'
 import { uiStore } from '../uiStore'
+import { detachCopilot } from './copilot'
 import { createNewFork, findMessageLocation } from './forks'
 import { insertMessageAfter, modifyMessage } from './messages'
 
@@ -187,6 +188,11 @@ export async function generate(
           model.isSupportToolUse('read-file'),
           { compactionPoints: session.compactionPoints }
         )
+        // 审查搭档默认「一条一用」：本轮上下文已经快照进 promptMsgs，这里立刻摘除，
+        // 避免搭档提示词继续约束后续消息。用户点了「保持到会话结束」(copilotPinned) 则跳过。
+        if (options?.operationType === 'send_message' && session.copilotId && !session.copilotPinned) {
+          void detachCopilot(sessionId).catch((error) => console.warn('detach copilot failed', error))
+        }
         const modifyMessageCache: OnResultChangeWithCancel = async (updated) => {
           const textLength = getMessageText(targetMsg, true, true).length
           if (!firstTokenLatency && textLength > 0) {

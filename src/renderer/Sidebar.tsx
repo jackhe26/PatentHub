@@ -1,6 +1,7 @@
 import { ActionIcon, Box, Button, Flex, Image, NavLink, Stack, Text, Tooltip } from '@mantine/core'
 import SwipeableDrawer from '@mui/material/SwipeableDrawer'
 import {
+  // IconBolt, // 已停用：仅 Skills 入口使用，入口注释后不再需要
   IconCirclePlus,
   IconCode,
   IconFileTypeJs,
@@ -8,6 +9,7 @@ import {
   IconLayoutSidebarLeftCollapse,
   IconMessageChatbot,
   IconPhotoPlus,
+  IconRobot,
   IconSettingsFilled,
 } from '@tabler/icons-react'
 import { useNavigate } from '@tanstack/react-router'
@@ -213,6 +215,33 @@ export default function Sidebar() {
             variant="light"
             p="xs"
           />
+          <NavLink
+            c="chatbox-secondary"
+            className="rounded"
+            label="🤖 Agents"
+            leftSection={<ScalableIcon icon={IconRobot} size={20} />}
+            onClick={() => {
+              navigate({ to: '/agents' as any })
+              if (isSmallScreen) setShowSidebar(false)
+            }}
+            variant="light"
+            p="xs"
+          />
+          {/* Skills 功能暂未完成（功能空缺），隐藏侧边栏入口；恢复时取消注释即可 */}
+          {/*
+          <NavLink
+            c="chatbox-secondary"
+            className="rounded"
+            label="⚡ Skills"
+            leftSection={<ScalableIcon icon={IconBolt} size={20} />}
+            onClick={() => {
+              navigate({ to: '/skills-market' as any })
+              if (isSmallScreen) setShowSidebar(false)
+            }}
+            variant="light"
+            p="xs"
+          />
+          */}
           <NavLink
             c="chatbox-secondary"
             className="rounded"

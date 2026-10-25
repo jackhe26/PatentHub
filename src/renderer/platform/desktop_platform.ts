@@ -203,11 +203,16 @@ export default class DesktopPlatform implements Platform {
     return this.ipc.invoke('ensureAutoLaunch', enable)
   }
 
-  async parseFileLocally(file: File): Promise<{ key?: string; isSupported: boolean; error?: string }> {
-    let result: { text: string; isSupported: boolean; error?: string; rawError?: string }
+  async parseFileLocally(file: File): Promise<{ key?: string; isSupported: boolean; error?: string; tempPath?: string }> {
+    let result: { text: string; isSupported: boolean; error?: string; rawError?: string; tempPath?: string }
     if (!file.path) {
-      // 复制长文本粘贴的文件是没有 path 的
-      result = await parseTextFileLocally(file)
+      // 拖拽/粘贴的文件没有 path：读取内容交给主进程写临时文件解析（支持 PDF 等二进制）
+      const buffer = await file.arrayBuffer()
+      const resultJSON = await this.ipc.invoke('parseFileByContent', {
+        name: file.name,
+        content: new Uint8Array(buffer),
+      })
+      result = JSON.parse(resultJSON)
     } else {
       const resultJSON = await this.ipc.invoke('parseFileLocally', JSON.stringify({ filePath: file.path }))
       result = JSON.parse(resultJSON)
@@ -220,9 +225,25 @@ export default class DesktopPlatform implements Platform {
     }
     const key = `parseFile-` + uuidv4()
     await this.setStoreBlob(key, result.text)
-    return { key, isSupported: true }
+    return { key, isSupported: true, tempPath: result.tempPath }
   }
 
+
+  // 仅为 PDF 预览写临时文件（拖拽/缓存命中场景，无 file.path 时使用），返回临时文件路径
+  async writeFileForPreview(file: File): Promise<string | undefined> {
+    try {
+      const buffer = await file.arrayBuffer()
+      const resultJSON = await this.ipc.invoke('writeFileForPreview', {
+        name: file.name,
+        content: new Uint8Array(buffer),
+      })
+      const result = JSON.parse(resultJSON)
+      return result.tempPath || undefined
+    } catch (err) {
+      console.error('[writeFileForPreview] failed:', err)
+      return undefined
+    }
+  }
   async parseFileWithMineru(
     file: File,
     apiToken: string

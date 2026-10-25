@@ -948,5 +948,11 @@
   "Your license has expired.": "您的許可證已過期。",
   "Your license has expired. Please check your subscription or purchase a new one.": "您的 License 已過期。請檢查您的訂閱或購買新的 License。",
   "Your license has expired. You can continue using your quota pack.": "您的許可證已過期。您可以繼續使用您的配額包。",
-  "Your rating on the App Store would help make Chatbox even better!": "您的 App Store 評分將幫助 Chatbox 變得更好！"
+  "Your rating on the App Store would help make Chatbox even better!": "您的 App Store 評分將幫助 Chatbox 變得更好！",
+  "Copilot": "審查搭檔",
+  "No matching copilot": "沒有匹配的搭檔",
+  "Remove Copilot": "移除搭檔",
+  "Change Copilot": "更換搭檔",
+  "Pin Copilot": "保持到會話結束",
+  "Unpin Copilot": "僅本條訊息生效"
 }

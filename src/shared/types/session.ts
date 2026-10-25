@@ -279,6 +279,12 @@ export const SessionSchema = z.object({
   starred: z.boolean().optional(),
   hidden: z.boolean().optional(), // Hidden from session list (e.g., migrated picture sessions)
   copilotId: z.string().optional(),
+  /**
+   * 审查搭档是否「保持到会话结束」。
+   * 缺省 / false = 只对发送的这一条消息生效，发送后自动摘除（默认行为）；
+   * true = 与旧行为一致，整个会话都保留该搭档的 system 提示词。
+   */
+  copilotPinned: z.boolean().optional(),
   assistantAvatarKey: z.string().optional(),
   settings: SessionSettingsSchema.optional(),
   threads: z.array(SessionThreadSchema).optional(),

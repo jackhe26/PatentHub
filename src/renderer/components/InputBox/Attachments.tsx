@@ -103,14 +103,14 @@ export function FileMiniCard(props: {
   )
 }
 
-function formatFileSize(bytes: number | undefined): string {
+export function formatFileSize(bytes: number | undefined): string {
   if (bytes === undefined || bytes === null) return ''
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
 }
 
-function getFileTypeLabel(filename: string, fileType?: string): string {
+export function getFileTypeLabel(filename: string, fileType?: string): string {
   const ext = filename.split('.').pop()?.toUpperCase()
   if (ext) return ext
   if (fileType) return fileType.split('/').pop()?.toUpperCase() || fileType

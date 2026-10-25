@@ -180,7 +180,7 @@ export function getFileAcceptString(): string {
  * Used for react-dropzone accept configuration
  */
 export function getFileAcceptConfig(): Record<string, string[]> {
-  return {
+  const config: Record<string, string[]> = {
     // Image files
     'image/*': ['.jpg', '.jpeg', '.png'],
     // Text files
@@ -276,4 +276,15 @@ export function getFileAcceptConfig(): Record<string, string[]> {
       '.dps',
     ],
   }
+
+  // 自动补齐：让拖拽(accept) 与点击上传(getFileAcceptString) 支持完全一致的格式
+  const existing = new Set<string>()
+  for (const exts of Object.values(config)) for (const e of exts) existing.add(e)
+  const allExts = [...allSupportedExts, '.numbers']
+  const missing = allExts.filter((e) => !existing.has(e))
+  if (missing.length > 0) {
+    config['application/octet-stream'] = [...(config['application/octet-stream'] || []), ...missing]
+  }
+
+  return config
 }

@@ -103,17 +103,18 @@ function Index() {
       // ✅ 在创建 session 前检查 PDF 文件
       const files = constructedMessage.files
       const hasSinglePdf = files && files.length === 1 && files[0].name.toLowerCase().endsWith('.pdf')
-      
+
       // 如果是单个 PDF，用 PDF 文件名命名 session
       const sessionName = hasSinglePdf ? files[0].name.replace('.pdf', '') : session.name
-      
+
       const newSession = await createSessionStore({
-        name: sessionName,  // ✅ 使用动态名称
+        name: sessionName, // ✅ 使用动态名称
         type: 'chat',
         assistantAvatarKey: session.assistantAvatarKey,
         picUrl: session.picUrl,
         messages: session.messages,
         copilotId: session.copilotId,
+        copilotPinned: session.copilotPinned,
         settings: session.settings,
       })
 
@@ -265,6 +266,10 @@ function Index() {
             sessionId="new"
             model={selectedModel}
             // fullWidth
+            copilotId={session.copilotId}
+            copilotPinned={session.copilotPinned}
+            onToggleCopilotPinned={() => setSession((old) => ({ ...old, copilotPinned: !old.copilotPinned }))}
+            onSelectCopilot={(copilot) => setSession((old) => ({ ...old, copilotId: copilot?.id }))}
             onSelectModel={onSelectModel}
             onClickSessionSettings={onClickSessionSettings}
             onSubmit={handleSubmit}
@@ -441,9 +446,7 @@ const CopilotItem = ({
       )}
       onClick={onClick}
     >
-      {index !== undefined && (
-        <CopilotIndexBadge index={index} size="xs" />
-      )}
+      {index !== undefined && <CopilotIndexBadge index={index} size="xs" />}
       {!noAvatar && (
         <Avatar src={picUrl} color="chatbox-brand" size={isSmallScreen ? 20 : 24}>
           {name.slice(0, 1)}
