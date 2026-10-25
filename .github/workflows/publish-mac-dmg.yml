@@ -1,0 +1,41 @@
+name: Publish macOS DMG to Release
+
+# 用途：把某次 Actions 运行里已构建好的 macOS 产物，原样追加到指定 Release。
+# 不重新构建、不改动 Release 说明，只补 dmg 资产。
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '目标 Release tag'
+        required: true
+        default: 'v1.4.6'
+      run_id:
+        description: '来源 workflow run id（含 mac-x64 / mac-arm64 产物）'
+        required: true
+        default: '40177238139'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download macOS artifacts from source run
+        uses: actions/download-artifact@v4
+        with:
+          pattern: 'mac-*'
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: release-files
+          merge-multiple: true
+
+      - name: List dmg files
+        run: find release-files -type f -name '*.dmg' | sort
+
+      - name: Upload DMGs to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ inputs.tag }}" release-files/**/*.dmg --clobber --repo "${{ github.repository }}"
