@@ -1,0 +1,82 @@
+name: Build macOS DMG
+
+# 用途：本地只打了 Windows 包时，用 Actions 的 macOS runner 补齐 .dmg，
+# 并追加到已存在的 Release（不会改动 Windows 资产与 Release 说明）。
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要附加 dmg 的 Release tag（例如 v1.4.6）'
+        required: true
+        default: 'v1.4.6'
+      build_ref:
+        description: '要构建的 git ref（分支/tag/SHA）'
+        required: true
+        default: 'master'
+
+permissions:
+  contents: write
+
+jobs:
+  build-mac:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            artifact_name: mac-x64
+          - arch: arm64
+            artifact_name: mac-arm64
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.build_ref }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build application
+        run: pnpm run build
+
+      - name: Build and Package macOS (${{ matrix.arch }})
+        run: pnpm exec electron-builder build --publish never --mac --${{ matrix.arch }}
+
+      - name: Upload dmg artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: release/build/*.dmg
+          if-no-files-found: error
+          retention-days: 5
+
+  publish:
+    needs: build-mac
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download dmg artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-files
+          merge-multiple: true
+
+      - name: List dmg files
+        run: find release-files -type f -name '*.dmg' | sort
+
+      - name: Upload DMGs to existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ inputs.tag }}" release-files/**/*.dmg --clobber --repo "${{ github.repository }}"
